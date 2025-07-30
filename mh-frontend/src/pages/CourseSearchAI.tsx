@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from "react";
-import { motion } from "framer-motion";
+import React, { useState, useEffect, useCallback } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 import {
   Search,
   ChevronDown,
@@ -9,34 +9,41 @@ import {
   BookOpen,
   AlertCircle,
   Sparkles,
+  Filter,
+  X,
+  Building2,
+  GraduationCap,
+  Globe,
+  Calendar,
+  Hash,
+  Layers,
+  Award,
+  Languages,
+  CheckCircle,
+  Info,
+  ExternalLink,
+  TrendingUp,
+  School,
+  Loader2,
 } from "lucide-react";
 import * as d3 from "d3";
+import { useCourses } from "@/hooks/useCourses";
+import { useColleges } from "@/hooks/useColleges";
+import { useCredits } from "@/hooks/useCredits";
+import { useDebouncedSearch } from "@/hooks/useDebouncedSearch";
+import type { Database } from "@/lib/supabase/database.types";
+import type { CourseFilters } from "@/types/course.types";
+import { LoadingSpinner } from "@/components/LoadingSpinner";
 
-// Interfaces
-interface Course {
-  course_id: number;
-  course_code: string;
-  catalog_number: string;
-  title: string;
-  description: string;
-  credits: string;
-  credit_level: string;
-  level: string;
-  repeatable: boolean;
-  pre_requisites: string;
-  college: string;
-  topic_type: boolean;
-  learning_outcomes: string;
-  clo_audience: string;
-  embedding: number[];
-  last_taught_term: string;
-  years_since_last_taught: string;
-  crosslisted: boolean;
-  subject_codes: number[];
-  relevance?: number;
-  topic_tags?: string[];
-  instructor?: string;
-  enrollment?: number;
+// Types
+type Course = Database["public"]["Tables"]["courses"]["Row"];
+
+interface CourseWithPopularity extends Course {
+  popularity_stats?: {
+    percent_taken: number;
+    student_count: number;
+    requirement: string | null;
+  }[];
 }
 
 interface FilterOption {
@@ -45,53 +52,10 @@ interface FilterOption {
   expandable: boolean;
 }
 
-// Mock data hook
-const useCourses = () => {
-  const [courses, setCourses] = useState<Course[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    // TODO: replace with real API call
-    setTimeout(() => {
-      setCourses(mockCourses);
-      setLoading(false);
-    }, 800);
-  }, []);
-
-  return { courses, loading };
-};
-
-// Mock AI recommendations hook
-const useAIRecommendations = (
-  query: string,
-  filters: Record<string, string>
-) => {
-  const [recommendations, setRecommendations] = useState<Course[]>([]);
-  const [loading, setLoading] = useState(false);
-
-  useEffect(() => {
-    if (query || Object.keys(filters).length > 0) {
-      setLoading(true);
-      setTimeout(() => {
-        const filtered = mockCourses
-          .map((course) => ({
-            ...course,
-            relevance: Math.floor(Math.random() * 30) + 70,
-            topic_tags: getTopicTags(course.course_code),
-          }))
-          .sort((a, b) => (b.relevance || 0) - (a.relevance || 0));
-
-        setRecommendations(filtered);
-        setLoading(false);
-      }, 600);
-    }
-  }, [query, filters]);
-
-  return { recommendations, loading };
-};
-
 // Helper to get topic tags
-const getTopicTags = (courseCode: string): string[] => {
+const getTopicTags = (courseCode: string | null): string[] => {
+  if (!courseCode) return ["General"];
+
   const tagMap: Record<string, string[]> = {
     "COMP SCI": ["AI", "Algorithms", "Programming"],
     STAT: ["Data Science", "Analytics", "Probability"],
@@ -101,84 +65,6 @@ const getTopicTags = (courseCode: string): string[] => {
   };
   return tagMap[courseCode] || ["General"];
 };
-
-// Mock courses
-const mockCourses: Course[] = [
-  {
-    course_id: 1,
-    course_code: "COMP SCI",
-    catalog_number: "300",
-    title: "Programming II",
-    description:
-      "Advanced programming concepts including data structures, algorithms, and software engineering principles.",
-    credits: "3",
-    credit_level: "Undergraduate",
-    level: "Intermediate",
-    repeatable: false,
-    pre_requisites: "COMP SCI 200",
-    college: "Letters & Science",
-    topic_type: false,
-    learning_outcomes: "Master advanced data structures and patterns.",
-    clo_audience: "Computer Science Majors",
-    embedding: [],
-    last_taught_term: "Fall 2024",
-    years_since_last_taught: "0",
-    crosslisted: false,
-    subject_codes: [266],
-    instructor: "Dr. Sarah Johnson",
-    enrollment: 150,
-  },
-  {
-    course_id: 2,
-    course_code: "STAT",
-    catalog_number: "301",
-    title: "Introduction to Statistical Methods",
-    description:
-      "Basic concepts of statistics including probability, distributions, hypothesis testing, and regression.",
-    credits: "3",
-    credit_level: "Undergraduate",
-    level: "Intermediate",
-    repeatable: false,
-    pre_requisites: "MATH 222",
-    college: "Letters & Science",
-    topic_type: false,
-    learning_outcomes:
-      "Understanding of fundamental statistical concepts and applications.",
-    clo_audience: "STEM Majors",
-    embedding: [],
-    last_taught_term: "Spring 2024",
-    years_since_last_taught: "0",
-    crosslisted: true,
-    subject_codes: [775],
-    instructor: "Prof. Michael Chen",
-    enrollment: 200,
-  },
-  {
-    course_id: 3,
-    course_code: "ECE",
-    catalog_number: "352",
-    title: "Digital System Fundamentals",
-    description:
-      "Introduction to digital logic, computer organization, and embedded design.",
-    credits: "3",
-    credit_level: "Undergraduate",
-    level: "Intermediate",
-    repeatable: false,
-    pre_requisites: "ECE 252",
-    college: "Engineering",
-    topic_type: false,
-    learning_outcomes:
-      "Design and implement digital systems using modern tools.",
-    clo_audience: "Engineering Students",
-    embedding: [],
-    last_taught_term: "Fall 2024",
-    years_since_last_taught: "0",
-    crosslisted: false,
-    subject_codes: [266],
-    instructor: "Dr. Emily Rodriguez",
-    enrollment: 120,
-  },
-];
 
 // Grade distribution chart
 const GradeDistributionChart = ({ courseId }: { courseId: number }) => {
@@ -246,7 +132,7 @@ const CourseCard = ({
   onSelect,
   showRelevance = false,
 }: {
-  course: Course;
+  course: CourseWithPopularity;
   selected: boolean;
   onSelect: () => void;
   showRelevance?: boolean;
@@ -259,6 +145,9 @@ const CourseCard = ({
     Robotics: "bg-yellow-100 text-yellow-700",
     Default: "bg-gray-100 text-gray-700",
   };
+
+  const topicTags = getTopicTags(course.course_code);
+  const popularityStats = course.popularity_stats?.[0];
 
   return (
     <motion.div
@@ -276,7 +165,7 @@ const CourseCard = ({
           {course.course_code} {course.catalog_number}
         </h3>
         <div className="flex gap-2">
-          {course.topic_tags?.map((tag, i) => (
+          {topicTags.map((tag: string, i: number) => (
             <span
               key={i}
               className={`px-3 py-1 rounded-full text-xs font-medium ${
@@ -291,10 +180,10 @@ const CourseCard = ({
 
       <p className="text-black text-base mb-3 font-medium">{course.title}</p>
 
-      {showRelevance && course.relevance && (
+      {showRelevance && popularityStats && (
         <div className="flex items-center gap-2 text-sm text-gray-700">
-          <Sparkles className="w-4 h-4" />
-          <span>Relevance: {course.relevance}%</span>
+          <TrendingUp className="w-4 h-4" />
+          <span>Popularity: {popularityStats.percent_taken?.toFixed(1)}%</span>
         </div>
       )}
 
@@ -303,49 +192,107 @@ const CourseCard = ({
           <Clock className="w-3 h-3" />
           {course.credits} credits
         </span>
-        <span className="flex items-center gap-1">
-          <Users className="w-3 h-3" />
-          {course.enrollment || 0} enrolled
-        </span>
+        {popularityStats && (
+          <span className="flex items-center gap-1">
+            <Users className="w-3 h-3" />
+            {popularityStats.student_count} students
+          </span>
+        )}
       </div>
     </motion.div>
   );
 };
 
+// Error and Loading Components
+const ErrorDisplay = ({
+  error,
+  onRetry,
+}: {
+  error: Error;
+  onRetry: () => void;
+}) => (
+  <div className="flex flex-col items-center justify-center py-12">
+    <AlertCircle className="w-12 h-12 text-red-500 mb-4" />
+    <h3 className="text-lg font-semibold text-gray-900 mb-2">
+      Error Loading Courses
+    </h3>
+    <p className="text-gray-600 mb-4">{error.message}</p>
+    <button
+      onClick={onRetry}
+      className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+    >
+      Try Again
+    </button>
+  </div>
+);
+
+const LoadingState = () => (
+  <div className="flex items-center justify-center py-12">
+    <LoadingSpinner size="lg" color="blue" />
+    <span className="ml-2 text-gray-600">Loading courses...</span>
+  </div>
+);
+
 // Main component
 const CourseSearchAIContent = () => {
-  const [searchQuery, setSearchQuery] = useState("");
-  const [selectedCourse, setSelectedCourse] = useState<Course | null>(null);
+  const [selectedCourse, setSelectedCourse] =
+    useState<CourseWithPopularity | null>(null);
   const [selectedCourses, setSelectedCourses] = useState<Set<number>>(
     new Set()
   );
   const [showComparison, setShowComparison] = useState(false);
-  const [activeFilters, setActiveFilters] = useState<Record<string, string>>(
-    {}
-  );
   const [expandedFilters, setExpandedFilters] = useState<Set<string>>(
     new Set()
   );
   const [aiMode, setAiMode] = useState(true);
   const [groupByTopic, setGroupByTopic] = useState(false);
+  const [currentPage, setCurrentPage] = useState(0);
+  const pageSize = 50;
 
-  const { courses, loading: coursesLoading } = useCourses();
-  const { recommendations, loading: recsLoading } = useAIRecommendations(
-    searchQuery,
-    activeFilters
+  // Filters state
+  const [filters, setFilters] = useState<CourseFilters>({
+    searchQuery: "",
+    college: [],
+    credits: [],
+    level: [],
+    crosslisted: null,
+    limit: pageSize,
+    offset: 0,
+  });
+
+  // Debounced search functionality
+  const handleSearch = useCallback((query: string) => {
+    setFilters((prev) => ({
+      ...prev,
+      searchQuery: query,
+      offset: 0, // Reset pagination on search
+    }));
+  }, []);
+
+  const { searchQuery, setSearchQuery, isSearching } = useDebouncedSearch(
+    handleSearch,
+    300
   );
 
-  const filters: FilterOption[] = [
-    { label: "Breadth", value: "", expandable: true },
-    { label: "General Education", value: "", expandable: true },
-    { label: "Level", value: "", expandable: true },
-    { label: "MOI", value: "", expandable: true },
-    { label: "Credits", value: "", expandable: true },
-    { label: "Honors", value: "", expandable: true },
-    { label: "Foreign Lang", value: "", expandable: true },
-    { label: "Session", value: "", expandable: true },
-    { label: "Reserved section", value: "", expandable: true },
-    { label: "Course Attributes", value: "", expandable: true },
+  // Fetch data from Supabase
+  const { courses, loading, error, totalCount, refetch } = useCourses({
+    searchQuery: filters.searchQuery,
+    college: filters.college,
+    credits: filters.credits,
+    level: filters.level,
+    crosslisted: filters.crosslisted,
+    limit: pageSize,
+    offset: currentPage * pageSize,
+  });
+
+  const { colleges } = useColleges();
+  const { credits: availableCredits } = useCredits();
+
+  const filterOptions = [
+    { label: "College", value: "college", expandable: true },
+    { label: "Credits", value: "credits", expandable: true },
+    { label: "Level", value: "level", expandable: true },
+    { label: "Crosslisted", value: "crosslisted", expandable: true },
   ];
 
   const popularTopics = [
@@ -365,7 +312,7 @@ const CourseSearchAIContent = () => {
     });
   };
 
-  const handleCourseSelect = (course: Course) => {
+  const handleCourseSelect = (course: CourseWithPopularity) => {
     setSelectedCourse(course);
     if (showComparison) {
       setSelectedCourses((prev) => {
@@ -378,7 +325,16 @@ const CourseSearchAIContent = () => {
     }
   };
 
-  const displayCourses = aiMode ? recommendations : courses;
+  const handleFilterChange = (
+    filterType: string,
+    value: string[] | boolean | null
+  ) => {
+    setFilters((prev) => ({
+      ...prev,
+      [filterType]: value,
+    }));
+    setCurrentPage(0); // Reset to first page when filters change
+  };
 
   return (
     <div className="min-h-screen bg-gray-50 text-gray-900">
@@ -386,7 +342,7 @@ const CourseSearchAIContent = () => {
         {/* Sidebar */}
         <div className="w-64 bg-white border-r border-gray-200 flex flex-col">
           <div className="p-6 space-y-4 flex-1 overflow-y-auto">
-            {filters.map((f) => (
+            {filterOptions.map((f) => (
               <motion.div
                 key={f.label}
                 initial={{ opacity: 0, x: -20 }}
@@ -539,12 +495,12 @@ const CourseSearchAIContent = () => {
               </p>
 
               <div className="space-y-3">
-                {coursesLoading || recsLoading ? (
-                  <div className="flex items-center justify-center py-12">
-                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-                  </div>
+                {error ? (
+                  <ErrorDisplay error={error} onRetry={refetch} />
+                ) : loading ? (
+                  <LoadingState />
                 ) : (
-                  displayCourses.map((course) => (
+                  courses.map((course) => (
                     <CourseCard
                       key={course.course_id}
                       course={course}
