@@ -28,8 +28,8 @@ const Navigation = () => {
       icon: <Search className="w-4 h-4" />,
     },
     {
-      name: "RA Feature",
-      href: "/ra-feature",
+      name: "RA Finder",
+      href: "/ra-finder",
       icon: <FlaskConical className="w-4 h-4" />,
     },
     {
