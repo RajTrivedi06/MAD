@@ -9,6 +9,7 @@ import { CourseSearchAI } from "./pages/CourseSearchAI";
 import { RAFeature } from "./pages/RAFeature";
 import { LoginPage } from "./pages/auth/LoginPage";
 import { RegisterPage } from "./pages/auth/RegisterPage";
+import { RaFinderPage } from "./features/ra-finder/RaFinderPage";
 
 const rootRoute = createRootRoute({
   component: RootLayout,
@@ -44,12 +45,19 @@ const registerRoute = createRoute({
   component: RegisterPage,
 });
 
+const raFinderRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/ra-finder",
+  component: RaFinderPage,
+});
+
 const routeTree = rootRoute.addChildren([
   indexRoute,
   courseSearchRoute,
   raFeatureRoute,
   loginRoute,
   registerRoute,
+  raFinderRoute,
 ]);
 
 export const router = createRouter({ routeTree });

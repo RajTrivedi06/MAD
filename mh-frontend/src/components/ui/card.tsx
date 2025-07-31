@@ -76,3 +76,32 @@ export const Container = ({
     </div>
   );
 };
+
+export const CardHeader = ({
+  className,
+  children,
+  onClick,
+}: {
+  className?: string;
+  children: ReactNode;
+  onClick?: () => void;
+}) => {
+  return (
+    <div
+      className={cn("flex flex-col space-y-1.5 p-6", className)}
+      onClick={onClick}
+    >
+      {children}
+    </div>
+  );
+};
+
+export const CardContent = ({
+  className,
+  children,
+}: {
+  className?: string;
+  children: ReactNode;
+}) => {
+  return <div className={cn("p-6 pt-0", className)}>{children}</div>;
+};
