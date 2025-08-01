@@ -118,63 +118,6 @@ async def parse_dars(file: UploadFile = File(...)) -> Dict[str, Any]:
             detail=f"Failed to parse DARS file: {str(e)}"
         )
 
-@router.post("/parse/text")
-async def parse_dars_text(text_content: Dict[str, str]) -> Dict[str, Any]:
-    """
-    Parse DARS text directly without file upload.
-    
-    Args:
-        text_content: Dictionary with 'text' key containing DARS report text
-        
-    Returns:
-        Dict containing parsed DARS data
-    """
-    if 'text' not in text_content:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Request body must contain 'text' field"
-        )
-    
-    text = text_content['text']
-    if not text.strip():
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Text content cannot be empty"
-        )
-    
-    try:
-        logger.info("Parsing DARS text content")
-        parsed_data = dars_parser.parse_dars_report(text)
-        
-        # Add metadata
-        parsed_data['file_metadata'] = {
-            'source': 'direct_text',
-            'text_length': len(text)
-        }
-        
-        # Validate certificate eligibility
-        parsed_data['certificate_eligible'] = validate_certificate_eligibility(parsed_data)
-        
-        # Generate summary
-        parsed_data['summary'] = generate_degree_audit_summary(parsed_data)
-        
-        logger.info(f"Successfully parsed DARS text for student: {parsed_data['student_info'].name}")
-        
-        return parsed_data
-        
-    except ValueError as ve:
-        logger.error(f"Validation error parsing DARS text: {str(ve)}")
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail=f"Invalid DARS format: {str(ve)}"
-        )
-    except Exception as e:
-        logger.error(f"Unexpected error parsing DARS text: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to parse DARS text: {str(e)}"
-        )
-
 @router.post("/parse/summary")
 async def parse_dars_summary_only(file: UploadFile = File(...)) -> Dict[str, Any]:
     """
@@ -264,20 +207,6 @@ async def validate_dars_file(file: UploadFile = File(...)) -> Dict[str, Any]:
                 'size': file.size
             }
         }
-
-@router.get("/health")
-async def health_check() -> Dict[str, str]:
-    """
-    Health check endpoint for the DARS parser service.
-    
-    Returns:
-        Dict with service status
-    """
-    return {
-        'status': 'healthy',
-        'service': 'DARS Parser API',
-        'version': '2.0.0'
-    }
 
 # Error handler for better error responses
 from fastapi import Request
