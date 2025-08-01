@@ -39,3 +39,19 @@ export interface EmailTemplateData {
   researchAlignment: string;
   personalizedHooks: string[];
 }
+
+export interface FilterOptions {
+  department?: string;
+  minScore?: number;
+  openingsOnly?: boolean;
+  sortBy?: "score" | "newest" | "department";
+}
+
+export interface ApplicationStatus {
+  applied: boolean;
+  appliedDate?: Date;
+  responseReceived?: boolean;
+  notes?: string;
+}
+
+export type EmailTone = "formal" | "friendly" | "enthusiastic";

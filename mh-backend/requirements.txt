@@ -1,6 +1,11 @@
-fastapi
-uvicorn
-pdfplumber
-spacy
-python-multipart
-pydantic
+fastapi>=0.104.0
+uvicorn[standard]>=0.24.0
+pdfplumber>=0.9.0
+spacy>=3.7.0
+python-multipart>=0.0.6
+pydantic>=2.4.0
+openai>=1.3.0
+supabase>=2.0.0
+python-dotenv>=1.0.0
+python-jose>=3.3.0
+passlib>=1.7.4

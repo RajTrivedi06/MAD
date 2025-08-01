@@ -1,10 +1,15 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { motion } from "framer-motion";
 import { InterestForm } from "./components/InterestForm";
 import { LabMatchCard } from "./components/LabMatchCard";
 import { SkeletonCard } from "./components/SkeletonCard";
+import { FilterBar } from "./components/FilterBar";
+import { ProgressDashboard } from "./components/ProgressDashboard";
+import { QuickActions } from "./components/QuickActions";
 import { mockMatches } from "./data/mockMatches";
-import { LabMatch } from "./types/labMatch";
+import { LabMatch, FilterOptions } from "./types/labMatch";
+import { useSavedLabs } from "./hooks/useSavedLabs";
+import { useApplicationTracker } from "./hooks/useApplicationTracker";
 import { Microscope, Brain, Users } from "lucide-react";
 
 export function RaFinderPage() {
@@ -12,6 +17,20 @@ export function RaFinderPage() {
   const [matches, setMatches] = useState<LabMatch[]>([]);
   const [loading, setLoading] = useState(false);
   const [hasSearched, setHasSearched] = useState(false);
+  const [filters, setFilters] = useState<FilterOptions>({});
+
+  // Custom hooks for saved labs and application tracking
+  const { savedCount, toggleSavedLab, isLabSaved } = useSavedLabs();
+
+  const {
+    markAsApplied,
+    markResponseReceived,
+    updateNotes,
+    removeApplication,
+    getApplicationStatus,
+    getAppliedCount,
+    getResponseCount,
+  } = useApplicationTracker();
 
   const handleSearch = async (useProfile: boolean) => {
     setLoading(true);
@@ -23,6 +42,55 @@ export function RaFinderPage() {
       setLoading(false);
     }, 1500);
   };
+
+  // Get unique departments for filter
+  const departments = useMemo(() => {
+    const uniqueDepts = [...new Set(matches.map((match) => match.department))];
+    return uniqueDepts.sort();
+  }, [matches]);
+
+  // Filter and sort matches based on current filters
+  const filteredMatches = useMemo(() => {
+    let filtered = [...matches];
+
+    // Apply department filter
+    if (filters.department && filters.department !== "all") {
+      filtered = filtered.filter(
+        (match) => match.department === filters.department
+      );
+    }
+
+    // Apply minimum score filter
+    if (filters.minScore && filters.minScore > 0) {
+      filtered = filtered.filter(
+        (match) => match.fitScore >= (filters.minScore || 0)
+      );
+    }
+
+    // Apply openings only filter
+    if (filters.openingsOnly) {
+      filtered = filtered.filter((match) => match.openings === true);
+    }
+
+    // Apply sorting
+    switch (filters.sortBy) {
+      case "newest":
+        // For demo purposes, we'll reverse the order
+        filtered = filtered.reverse();
+        break;
+      case "department":
+        filtered = filtered.sort((a, b) =>
+          a.department.localeCompare(b.department)
+        );
+        break;
+      case "score":
+      default:
+        filtered = filtered.sort((a, b) => b.fitScore - a.fitScore);
+        break;
+    }
+
+    return filtered;
+  }, [matches, filters]);
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -63,9 +131,10 @@ export function RaFinderPage() {
         </div>
       </div>
 
-      {/* Search Section */}
+      {/* Main Content */}
       <div className="max-w-4xl mx-auto px-4 py-8">
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+        {/* Search Section */}
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
           <InterestForm
             keywords={keywords}
             onKeywordsChange={setKeywords}
@@ -74,19 +143,37 @@ export function RaFinderPage() {
           />
         </div>
 
+        {/* Progress Dashboard */}
+        {hasSearched && (
+          <ProgressDashboard
+            matchCount={filteredMatches.length}
+            savedCount={savedCount}
+            appliedCount={getAppliedCount()}
+            responseCount={getResponseCount()}
+          />
+        )}
+
         {/* Results Section */}
         <div className="mt-8">
           {hasSearched && (
             <>
+              {/* Filter Bar */}
+              {matches.length > 0 && !loading && (
+                <FilterBar
+                  onFilterChange={setFilters}
+                  departments={departments}
+                  matchCount={filteredMatches.length}
+                  activeFilters={filters}
+                />
+              )}
+
               <div className="flex items-center justify-between mb-6">
                 <h2 className="text-xl font-semibold text-gray-900">
-                  {loading
-                    ? "Finding matches..."
-                    : `Found ${matches.length} matches`}
+                  {loading ? "Finding matches..." : `Research Opportunities`}
                 </h2>
-                {!loading && matches.length > 0 && (
+                {!loading && filteredMatches.length > 0 && (
                   <span className="text-sm text-gray-600">
-                    Sorted by match score
+                    Showing {filteredMatches.length} of {matches.length} matches
                   </span>
                 )}
               </div>
@@ -98,17 +185,34 @@ export function RaFinderPage() {
                     <SkeletonCard />
                     <SkeletonCard />
                   </>
-                ) : matches.length > 0 ? (
-                  matches.map((match, index) => (
+                ) : filteredMatches.length > 0 ? (
+                  filteredMatches.map((match, index) => (
                     <motion.div
                       key={match.id}
                       initial={{ opacity: 0, y: 20 }}
                       animate={{ opacity: 1, y: 0 }}
                       transition={{ delay: index * 0.1 }}
                     >
-                      <LabMatchCard match={match} />
+                      <LabMatchCard
+                        match={match}
+                        isSaved={isLabSaved(match.id)}
+                        onToggleSaved={toggleSavedLab}
+                        applicationStatus={getApplicationStatus(match.id)}
+                        onMarkAsApplied={markAsApplied}
+                        onMarkResponseReceived={markResponseReceived}
+                        onUpdateNotes={updateNotes}
+                        onRemoveApplication={removeApplication}
+                      />
                     </motion.div>
                   ))
+                ) : matches.length > 0 ? (
+                  <div className="text-center py-12">
+                    <Brain className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                    <p className="text-gray-600">
+                      No matches found with current filters. Try adjusting your
+                      criteria.
+                    </p>
+                  </div>
                 ) : (
                   <div className="text-center py-12">
                     <Brain className="w-12 h-12 text-gray-400 mx-auto mb-4" />
@@ -135,6 +239,25 @@ export function RaFinderPage() {
           )}
         </div>
       </div>
+
+      {/* Quick Actions Floating Menu */}
+      <QuickActions
+        matches={filteredMatches}
+        savedCount={savedCount}
+        appliedCount={getAppliedCount()}
+        onShowSavedLabs={() => {
+          // TODO: Implement saved labs modal
+          alert(`You have ${savedCount} saved labs`);
+        }}
+        onShowStats={() => {
+          // TODO: Implement statistics modal
+          alert(
+            `Statistics: ${
+              filteredMatches.length
+            } matches, ${savedCount} saved, ${getAppliedCount()} applied`
+          );
+        }}
+      />
     </div>
   );
 }

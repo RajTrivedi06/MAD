@@ -11,14 +11,22 @@ import {
   LogIn,
   UserPlus,
   Sparkles,
+  User,
 } from "lucide-react";
-import { Link } from "@tanstack/react-router";
+import Link from "next/link";
+import { useAuth } from "@/contexts/AuthContext";
 
 const Navigation = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const { user, signOut } = useAuth();
 
   const toggleMenu = () => {
     setIsMenuOpen(!isMenuOpen);
+  };
+
+  const handleSignOut = async () => {
+    await signOut();
+    setIsMenuOpen(false);
   };
 
   const navItems = [
@@ -32,6 +40,7 @@ const Navigation = () => {
       href: "/ra-finder",
       icon: <FlaskConical className="w-4 h-4" />,
     },
+
     {
       name: "Study Groups",
       href: "#",
@@ -54,7 +63,7 @@ const Navigation = () => {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between items-center h-16">
           {/* Logo */}
-          <Link to="/" className="flex items-center space-x-2">
+          <Link href="/" className="flex items-center space-x-2">
             <motion.div
               whileHover={{ scale: 1.05 }}
               className="flex items-center space-x-2"
@@ -73,7 +82,7 @@ const Navigation = () => {
             {navItems.map((item) => (
               <Link
                 key={item.name}
-                to={item.href}
+                href={item.href}
                 className="relative flex items-center space-x-1 text-gray-700 hover:text-red-600 transition-colors font-medium"
               >
                 {item.icon}
@@ -87,22 +96,43 @@ const Navigation = () => {
             ))}
           </div>
 
-          {/* Desktop Auth Buttons */}
+          {/* Desktop Auth/User Section */}
           <div className="hidden md:flex items-center space-x-4">
-            {authItems.map((item) => (
-              <Link
-                key={item.name}
-                to={item.href}
-                className={`flex items-center space-x-1 px-4 py-2 rounded-lg font-medium transition-colors ${
-                  item.name === "Sign Up"
-                    ? "bg-red-600 text-white hover:bg-red-700"
-                    : "text-gray-700 hover:text-red-600"
-                }`}
-              >
-                {item.icon}
-                <span>{item.name}</span>
-              </Link>
-            ))}
+            {user ? (
+              <>
+                <Link
+                  href="/accounts"
+                  className="flex items-center space-x-2 text-gray-700 hover:text-red-600 transition-colors font-medium"
+                >
+                  <User className="w-4 h-4" />
+                  <span>Account</span>
+                </Link>
+                <button
+                  onClick={handleSignOut}
+                  className="flex items-center space-x-1 px-4 py-2 rounded-lg font-medium transition-colors text-gray-700 hover:text-red-600"
+                >
+                  <LogIn className="w-4 h-4" />
+                  <span>Sign Out</span>
+                </button>
+              </>
+            ) : (
+              <>
+                {authItems.map((item) => (
+                  <Link
+                    key={item.name}
+                    href={item.href}
+                    className={`flex items-center space-x-1 px-4 py-2 rounded-lg font-medium transition-colors ${
+                      item.name === "Sign Up"
+                        ? "bg-red-600 text-white hover:bg-red-700"
+                        : "text-gray-700 hover:text-red-600"
+                    }`}
+                  >
+                    {item.icon}
+                    <span>{item.name}</span>
+                  </Link>
+                ))}
+              </>
+            )}
           </div>
 
           {/* Mobile menu button */}
@@ -132,7 +162,7 @@ const Navigation = () => {
               {navItems.map((item) => (
                 <Link
                   key={item.name}
-                  to={item.href}
+                  href={item.href}
                   className="flex items-center space-x-2 text-gray-700 hover:text-red-600 transition-colors font-medium py-2"
                   onClick={() => setIsMenuOpen(false)}
                 >
@@ -146,21 +176,43 @@ const Navigation = () => {
                 </Link>
               ))}
               <div className="border-t border-gray-200 pt-4 space-y-2">
-                {authItems.map((item) => (
-                  <Link
-                    key={item.name}
-                    to={item.href}
-                    className={`flex items-center space-x-2 px-4 py-2 rounded-lg font-medium transition-colors ${
-                      item.name === "Sign Up"
-                        ? "bg-red-600 text-white hover:bg-red-700"
-                        : "text-gray-700 hover:text-red-600"
-                    }`}
-                    onClick={() => setIsMenuOpen(false)}
-                  >
-                    {item.icon}
-                    <span>{item.name}</span>
-                  </Link>
-                ))}
+                {user ? (
+                  <>
+                    <Link
+                      href="/accounts"
+                      className="flex items-center space-x-2 text-gray-700 hover:text-red-600 transition-colors font-medium py-2"
+                      onClick={() => setIsMenuOpen(false)}
+                    >
+                      <User className="w-4 h-4" />
+                      <span>Account</span>
+                    </Link>
+                    <button
+                      onClick={handleSignOut}
+                      className="w-full flex items-center space-x-2 px-4 py-2 rounded-lg font-medium transition-colors text-gray-700 hover:text-red-600"
+                    >
+                      <LogIn className="w-4 h-4" />
+                      <span>Sign Out</span>
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    {authItems.map((item) => (
+                      <Link
+                        key={item.name}
+                        href={item.href}
+                        className={`flex items-center space-x-2 px-4 py-2 rounded-lg font-medium transition-colors ${
+                          item.name === "Sign Up"
+                            ? "bg-red-600 text-white hover:bg-red-700"
+                            : "text-gray-700 hover:text-red-600"
+                        }`}
+                        onClick={() => setIsMenuOpen(false)}
+                      >
+                        {item.icon}
+                        <span>{item.name}</span>
+                      </Link>
+                    ))}
+                  </>
+                )}
               </div>
             </div>
           </motion.div>

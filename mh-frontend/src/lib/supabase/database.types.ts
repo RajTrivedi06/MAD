@@ -1,6 +1,50 @@
 export type Database = {
   public: {
     Tables: {
+      profiles: {
+        Row: {
+          id: string;
+          email: string;
+          first_name: string | null;
+          last_name: string | null;
+          full_name: string | null;
+          avatar_url: string | null;
+          preferences: any | null;
+          dars_data: any | null;
+          cv_data: any | null;
+          processing_status: any | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id: string;
+          email: string;
+          first_name?: string | null;
+          last_name?: string | null;
+          full_name?: string | null;
+          avatar_url?: string | null;
+          preferences?: any | null;
+          dars_data?: any | null;
+          cv_data?: any | null;
+          processing_status?: any | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          email?: string;
+          first_name?: string | null;
+          last_name?: string | null;
+          full_name?: string | null;
+          avatar_url?: string | null;
+          preferences?: any | null;
+          dars_data?: any | null;
+          cv_data?: any | null;
+          processing_status?: any | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+      };
       courses: {
         Row: {
           course_id: number;
