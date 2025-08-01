@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { X, Copy, Mail, Sparkles, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { LabMatch } from "../types/labMatch";
+import { LabMatch, EmailTone } from "../types/labMatch";
 import { motion, AnimatePresence } from "framer-motion";
 
 interface EmailTemplateModalProps {
@@ -31,48 +31,117 @@ export function EmailTemplateModal({
   const [selectedSubject, setSelectedSubject] = useState(0);
   const [emailContent, setEmailContent] = useState("");
   const [copied, setCopied] = useState(false);
+  const [emailTone, setEmailTone] = useState<EmailTone>("formal");
 
   const generateEmailContent = useCallback(() => {
-    const template = `Dear Dr. ${match.piName.split(" ").pop()},
+    const templates = {
+      formal: `Dear Dr. ${match.piName.split(" ").pop()},
 
-I am ${userProfile.name}, a ${userProfile.year} studying ${
-      userProfile.major
-    } at UW-Madison. I am writing to express my strong interest in joining your ${
-      match.labTitle
-    }.
+I hope this email finds you well. My name is ${userProfile.name}, and I am a ${
+        userProfile.year
+      } majoring in ${
+        userProfile.major
+      } at the University of Wisconsin-Madison. I am writing to express my sincere interest in joining your research team at the ${
+        match.labTitle
+      }.
 
 ${
   match.emailTemplateData?.personalizedHooks[0] ||
-  "Your research aligns perfectly with my academic interests and career goals."
+  `Your research in ${match.researchAreas[0]} aligns perfectly with my academic interests and career aspirations.`
 }
 
 ${
   match.emailTemplateData?.researchAlignment ||
-  `I am particularly drawn to your work in ${match.researchAreas[0]} because of my experience with ${userProfile.skills[0]}.`
+  `I am particularly drawn to your work because of my experience with ${userProfile.skills
+    .slice(0, 2)
+    .join(" and ")}.`
 }
 
-Key points about my background:
+My relevant qualifications include:
 ${
   match.emailTemplateData?.keyPoints.map((point) => `• ${point}`).join("\n") ||
-  `• Relevant coursework in ${
-    match.researchAreas[0]
-  }\n• Experience with ${userProfile.skills.join(
-    ", "
-  )}\n• Strong interest in research`
+  userProfile.skills.map((skill) => `• Proficiency in ${skill}`).join("\n")
 }
 
-I would be grateful for the opportunity to discuss how I could contribute to your research. I am available for a meeting at your convenience and have attached my CV for your review.
+I have attached my CV for your review and would be grateful for the opportunity to discuss how I could contribute to your research. I am available to meet at your convenience.
 
-Thank you for considering my application.
+Thank you for considering my application. I look forward to the possibility of contributing to your important work.
 
 Best regards,
 ${userProfile.name}
 ${userProfile.major}, ${userProfile.year}
-[Your Phone Number]
-[Your Email]`;
+[Your Email] • [Your Phone Number]`,
 
-    setEmailContent(template);
-  }, [match, userProfile]);
+      friendly: `Hi Dr. ${match.piName.split(" ").pop()},
+
+I'm ${userProfile.name}, a ${userProfile.year} ${
+        userProfile.major
+      } major at UW-Madison. I came across your ${
+        match.labTitle
+      } and was immediately intrigued by your work in ${match.researchAreas[0]}.
+
+${
+  match.emailTemplateData?.personalizedHooks[1] ||
+  match.emailTemplateData?.personalizedHooks[0] ||
+  `Your research really resonates with me because of my passion for ${match.researchAreas[0]}.`
+}
+
+A bit about me:
+${
+  match.emailTemplateData?.keyPoints
+    .slice(0, 3)
+    .map((point) => `• ${point}`)
+    .join("\n") ||
+  `• I have experience with ${userProfile.skills[0]}\n• I'm passionate about research\n• I'm eager to learn and contribute`
+}
+
+I'd love to chat about potential opportunities in your lab. I've attached my CV and I'm happy to meet whenever works best for you.
+
+Looking forward to hearing from you!
+
+Best,
+${userProfile.name}
+[Your Email]`,
+
+      enthusiastic: `Dear Dr. ${match.piName.split(" ").pop()},
+
+I'm ${userProfile.name}, a ${userProfile.year} studying ${
+        userProfile.major
+      }, and I'm incredibly excited about the possibility of joining your ${
+        match.labTitle
+      }!
+
+${
+  match.emailTemplateData?.personalizedHooks[0] ||
+  `Your groundbreaking work in ${match.researchAreas[0]} is exactly what inspired me to pursue research in this field.`
+}
+
+What particularly excites me about your lab:
+• ${match.researchAreas.slice(0, 2).join(" and ")} - areas I'm passionate about
+• Your innovative approach to ${match.researchAreas[0]}
+• The opportunity to contribute to meaningful research
+
+My background:
+${match.emailTemplateData?.keyPoints
+  .slice(0, 3)
+  .map((point) => `• ${point}`)
+  .join("\n")}
+
+I would be thrilled to discuss how my skills in ${userProfile.skills
+        .slice(0, 2)
+        .join(
+          " and "
+        )} could contribute to your team. I've attached my CV and am eager to learn more about current projects and opportunities.
+
+Thank you for your time and consideration!
+
+Enthusiastically,
+${userProfile.name}
+[Your Email]`,
+    };
+
+    setEmailContent(templates[emailTone]);
+  }, [match, userProfile, emailTone]);
 
   useEffect(() => {
     if (isOpen && match.emailTemplateData) {
@@ -129,6 +198,49 @@ ${userProfile.major}, ${userProfile.year}
 
           {/* Content */}
           <div className="p-6 overflow-y-auto max-h-[calc(90vh-200px)]">
+            {/* Email Tone Selector */}
+            <div className="mb-6">
+              <h3 className="text-lg font-semibold text-gray-900 mb-3">
+                Email Tone
+              </h3>
+              <div className="flex gap-2">
+                <Button
+                  variant={emailTone === "formal" ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setEmailTone("formal")}
+                  className={
+                    emailTone === "formal" ? "bg-red-600 hover:bg-red-700" : ""
+                  }
+                >
+                  Professional
+                </Button>
+                <Button
+                  variant={emailTone === "friendly" ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setEmailTone("friendly")}
+                  className={
+                    emailTone === "friendly"
+                      ? "bg-red-600 hover:bg-red-700"
+                      : ""
+                  }
+                >
+                  Friendly
+                </Button>
+                <Button
+                  variant={emailTone === "enthusiastic" ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setEmailTone("enthusiastic")}
+                  className={
+                    emailTone === "enthusiastic"
+                      ? "bg-red-600 hover:bg-red-700"
+                      : ""
+                  }
+                >
+                  Enthusiastic
+                </Button>
+              </div>
+            </div>
+
             {/* Subject Line Options */}
             <div className="mb-6">
               <h3 className="text-lg font-semibold text-gray-900 mb-3">

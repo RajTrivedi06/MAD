@@ -8,20 +8,38 @@ import {
   Calendar,
   Sparkles,
   BookOpen,
+  Heart,
 } from "lucide-react";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { LabMatch } from "../types/labMatch";
+import { LabMatch, ApplicationStatus } from "../types/labMatch";
 import { EmailTemplateModal } from "./EmailTemplateModal";
 import { LearningResourcesPanel } from "./LearningResourcesPanel";
+import { ApplicationTracker } from "./ApplicationTracker";
 
 interface LabMatchCardProps {
   match: LabMatch;
+  isSaved?: boolean;
+  onToggleSaved?: (labId: string) => void;
+  applicationStatus?: ApplicationStatus;
+  onMarkAsApplied?: (labId: string, notes?: string) => void;
+  onMarkResponseReceived?: (labId: string, notes?: string) => void;
+  onUpdateNotes?: (labId: string, notes: string) => void;
+  onRemoveApplication?: (labId: string) => void;
 }
 
-export function LabMatchCard({ match }: LabMatchCardProps) {
+export function LabMatchCard({
+  match,
+  isSaved = false,
+  onToggleSaved,
+  applicationStatus = { applied: false },
+  onMarkAsApplied,
+  onMarkResponseReceived,
+  onUpdateNotes,
+  onRemoveApplication,
+}: LabMatchCardProps) {
   const [expanded, setExpanded] = useState(false);
   const [showEmailModal, setShowEmailModal] = useState(false);
 
@@ -63,6 +81,26 @@ export function LabMatchCard({ match }: LabMatchCardProps) {
             </div>
 
             <div className="flex items-center gap-4">
+              {/* Save Button */}
+              {onToggleSaved && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onToggleSaved(match.id);
+                  }}
+                  className="text-gray-400 hover:text-red-600"
+                >
+                  <Heart
+                    className={cn(
+                      "w-5 h-5",
+                      isSaved && "fill-current text-red-600"
+                    )}
+                  />
+                </Button>
+              )}
+
               <div
                 className={cn(
                   "px-4 py-2 rounded-lg border text-center",
@@ -181,6 +219,25 @@ export function LabMatchCard({ match }: LabMatchCardProps) {
                   </a>
                 </Button>
               </div>
+
+              {/* Application Tracker Section */}
+              {(onMarkAsApplied ||
+                onMarkResponseReceived ||
+                onUpdateNotes ||
+                onRemoveApplication) && (
+                <div className="mt-6">
+                  <ApplicationTracker
+                    labId={match.id}
+                    status={applicationStatus}
+                    onMarkAsApplied={onMarkAsApplied || (() => {})}
+                    onMarkResponseReceived={
+                      onMarkResponseReceived || (() => {})
+                    }
+                    onUpdateNotes={onUpdateNotes || (() => {})}
+                    onRemoveApplication={onRemoveApplication || (() => {})}
+                  />
+                </div>
+              )}
 
               {/* Learning Resources Section */}
               {(match.learningResources ||

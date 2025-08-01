@@ -1,9 +1,10 @@
+"use client";
 import React from "react";
 import { motion } from "framer-motion";
-import { Mail, Github, Twitter, Linkedin, Sparkles, Heart } from "lucide-react";
-import { Link } from "@tanstack/react-router";
+import { Github, Sparkles, Heart } from "lucide-react";
+import Link from "next/link";
 
-const Footer = () => {
+const Footer: React.FC = () => {
   const footerSections = [
     {
       title: "Features",
@@ -31,13 +32,8 @@ const Footer = () => {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-8">
           {/* Brand Section */}
           <div className="lg:col-span-2">
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }}
-              className="mb-6"
-            >
-              <Link to="/" className="flex items-center space-x-2 mb-4">
+            <div className="mb-6">
+              <Link href="/" className="flex items-center space-x-2 mb-4">
                 <div className="w-10 h-10 bg-red-600 rounded-lg flex items-center justify-center">
                   <Sparkles className="w-6 h-6 text-white" />
                 </div>
@@ -50,39 +46,27 @@ const Footer = () => {
                 perfect courses and research opportunities with intelligent
                 recommendations.
               </p>
-            </motion.div>
+            </div>
 
             {/* Social Links */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }}
-              transition={{ delay: 0.1 }}
-              className="flex space-x-4"
-            >
+            <div className="flex space-x-4">
               {socialLinks.map((social) => (
-                <motion.a
+                <a
                   key={social.name}
                   href={social.href}
-                  whileHover={{ scale: 1.1, y: -2 }}
-                  whileTap={{ scale: 0.95 }}
                   className="w-10 h-10 bg-gray-800 rounded-lg flex items-center justify-center text-gray-400 hover:text-red-600 hover:bg-gray-700 transition-colors"
+                  target="_blank"
+                  rel="noopener noreferrer"
                 >
                   {social.icon}
-                </motion.a>
+                </a>
               ))}
-            </motion.div>
+            </div>
           </div>
 
           {/* Footer Links */}
-          {footerSections.map((section, index) => (
-            <motion.div
-              key={section.title}
-              initial={{ opacity: 0, y: 20 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }}
-              transition={{ delay: 0.1 + index * 0.05 }}
-            >
+          {footerSections.map((section) => (
+            <div key={section.title}>
               <h4 className="font-semibold text-lg mb-4 text-white">
                 {section.title}
               </h4>
@@ -90,7 +74,7 @@ const Footer = () => {
                 {section.links.map((link) => (
                   <li key={link.name}>
                     <Link
-                      to={link.href}
+                      href={link.href}
                       className="text-gray-400 hover:text-red-600 transition-colors duration-200"
                     >
                       {link.name}
@@ -98,7 +82,7 @@ const Footer = () => {
                   </li>
                 ))}
               </ul>
-            </motion.div>
+            </div>
           ))}
         </div>
       </div>
