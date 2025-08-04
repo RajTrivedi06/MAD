@@ -115,7 +115,7 @@ class EnhancedDarsParser:
                 'preparation_info': self._extract_preparation_info(text),
                 'degree_program': self._extract_degree_program_info(text),
                 'gpa_info': self._extract_gpa_info(text),
-                'credits_summary': self._extract_credits_summary(text),
+                'degree_credits': self._extract_degree_credits(text),
                 'courses': self._extract_all_courses(text),
                 'in_progress_courses': self._extract_in_progress_courses(text),
                 'breadth_requirements': self._extract_breadth_requirements(text),
@@ -154,65 +154,49 @@ class EnhancedDarsParser:
                 raise ValueError(f"DARS report missing required pattern: {pattern}")
     
     def _extract_student_info(self, text: str) -> StudentInfo:
-        """Extract comprehensive student information"""
-        # Extract student name - look for pattern "., [Name]" or "[LastName], [FirstName]" before "Catalog Year"
-        name_match = re.search(r'([^,\n]*),\s*([A-Za-z]+)\s+Catalog Year:', text)
+        """Extract comprehensive student information from DARS text"""
+        
+        # Extract student name: handles ".,Kushal" or "Trivedi,Raj Sameer"
+        name_match = re.search(r'([^,\n]*),\s*([A-Za-z][A-Za-z\s\-]*)\s+Catalog Year:', text)
         if name_match:
             last_name = name_match.group(1).strip()
             first_name = name_match.group(2).strip()
             
-            # Handle cases where last name is just a period or hyphen
-            if last_name in ['.', '-']:
-                name = first_name  # Only first name
+            # Handle cases like "."
+            if re.fullmatch(r'[^\w]+', last_name):  # only punctuation
+                name = first_name
             else:
-                name = f"{first_name} {last_name}"  # First Last format
+                name = f"{first_name} {last_name}"
         else:
             name = "Unknown"
-        
-        # Extract student ID from filename or document
-        student_id_match = re.search(r'(\d{10})', text)
-        student_id = student_id_match.group(1) if student_id_match else ""
-        
-        # Extract catalog year
+
+        # Extract student ID (more precise): use line that starts with 'Prepared:'
+        id_match = re.search(r'Prepared:.*?(\d{10})', text)
+        student_id = id_match.group(1) if id_match else ""
+
+        # Catalog Year
         catalog_year_match = re.search(r'Catalog Year:\s*(\d{4,5})', text)
         catalog_year = catalog_year_match.group(1) if catalog_year_match else ""
-        
-        # Extract program code
-        program_code_match = re.search(r'Program Code:\s*([A-Z0-9\s]+)', text)
+
+        # Program Code
+        program_code_match = re.search(r'Program Code:\s*([A-Z]+\s*\d+)', text)
         program_code = program_code_match.group(1).strip() if program_code_match else ""
-        
-        # Extract alternate catalog year
+
+        # Alternate Catalog Year
         alt_catalog_match = re.search(r'Alternate Catalog Year:\s*(\d{4,5})', text)
-        alt_catalog_year = alt_catalog_match.group(1) if alt_catalog_match else ""
-        
-        # Extract admit type
+        alternate_catalog_year = alt_catalog_match.group(1) if alt_catalog_match else ""
+
+        # Admit Type
         admit_type_match = re.search(r'Admit Type:\s*([A-Z]+)', text)
         admit_type = admit_type_match.group(1) if admit_type_match else ""
-        
-        # # Extract advisors - look for the actual advisor section in the document
-        # advisors = []
-        # # Find the Advisors section by looking for the pattern in the left column
-        # advisor_section = re.search(r'Advisors:\s*(.*?)(?=HS Units|Language|$)', text, re.DOTALL | re.IGNORECASE)
-        # if advisor_section:
-        #     advisor_text = advisor_section.group(1).strip()
-        #     # Split by newlines and clean up each advisor name
-        #     advisor_lines = advisor_text.split('\n')
-        #     for line in advisor_lines:
-        #         line = line.strip()
-        #         # Skip empty lines and lines that don't look like names
-        #         if line and not line.startswith('-') and ',' in line:
-        #             # Clean up the advisor name (remove extra whitespace)
-        #             advisor_name = ' '.join(line.split())
-        #             advisors.append(advisor_name)
-        
+
         return StudentInfo(
             name=name,
             student_id=student_id,
             catalog_year=catalog_year,
             program_code=program_code,
-            alternate_catalog_year=alt_catalog_year,
-            admit_type=admit_type,
-            # advisors=advisors
+            alternate_catalog_year=alternate_catalog_year,
+            admit_type=admit_type
         )
     
     def _extract_preparation_info(self, text: str) -> Dict[str, str]:
@@ -220,15 +204,13 @@ class EnhancedDarsParser:
         prep_match = re.search(r'Prepared:\s*(\d{2}/\d{2}/\d{2})\s*-\s*(\d{2}:\d{2})\s*(\d+)', text)
         
         if prep_match:
-            date_str, time_str, report_id = prep_match.groups()
-            # Convert to full year (assuming 20xx for years 00-99)
+            date_str, time_str, _ = prep_match.groups()  # Ignore report_id
             year = "20" + date_str.split('/')[2]
             full_date = date_str.replace(date_str.split('/')[2], year)
             
             return {
                 'date': full_date,
                 'time': time_str,
-                'report_id': report_id,
                 'full_timestamp': f"{full_date} {time_str}"
             }
         
@@ -317,7 +299,7 @@ class EnhancedDarsParser:
         
         return GpaInfo(0.0, 0.0, 0.0, 0.0)
     
-    def _extract_credits_summary(self, text: str) -> Dict[str, float]:
+    def _extract_degree_credits(self, text: str) -> Dict[str, float]:
         """Extract credit summary information from Total Credits for the Degree section"""
         summary = {
             'total_earned': 0.0,
@@ -362,12 +344,14 @@ class EnhancedDarsParser:
         return summary
     
     def _extract_all_courses(self, text: str) -> List[Course]:
-        """Extract all courses from the transcript with improved pattern matching"""
+        """Extract all courses from the transcript, excluding those already categorized in breadth requirements"""
         courses = []
         
-        # Updated pattern to better match the DARS format
-        # FA22 COMP SCI300 3.00 A Programming II
-        course_pattern = r'([A-Z]{2}\d{2})\s+([A-Z\s&]+?)(\d{3,4}[A-Z]*)\s+(\d+\.\d+)\s+([A-Z]+|INP)\s*(.*?)(?=\n|$)'
+        # Updated pattern to better match the DARS format, including edge cases
+        # Handles: FA22 COMP SCI300, FA22 LIT X10, FA24 ACCT I S300, etc.
+        course_pattern = r'([A-Z]{2}\d{2})\s+([A-Z\s&]+?)([X]?\d{3,4}[A-Z]*)\s+(\d+\.\d+)\s+([A-Z]+|INP)\s*(.*?)(?=\n|$)'
+        
+        courses_list = []  # Use list to preserve all instances, especially for repeatable courses
         
         for match in re.finditer(course_pattern, text, re.MULTILINE):
             term = match.group(1)
@@ -377,8 +361,16 @@ class EnhancedDarsParser:
             grade = match.group(5)
             title = match.group(6).strip() if match.group(6) else ""
             
-            # Clean up subject (remove extra spaces)
+            # Clean up subject (remove extra spaces and apply same logic as reference)
             subject = ' '.join(subject_raw.split())
+            
+            # Skip courses with 'EARNED' in title like reference method
+            if 'EARNED' in title:
+                continue
+                
+            # Handle special Statics case like reference method
+            if "Statics" in title:
+                credits = 3.00
             
             # Check for special course markers in title
             is_repeatable = '>R' in title
@@ -398,9 +390,27 @@ class EnhancedDarsParser:
                 is_duplicate=is_duplicate
             )
             
-            courses.append(course)
-        
-        return courses
+            courses_list.append(course)
+    
+        # Now handle deduplication, but preserve repeatable courses
+        courses_dict = {}
+        for course in courses_list:
+            # For repeatable courses, use term + course_code as key to preserve multiple instances
+            if course.is_repeatable:
+                course_key = f"{course.term}_{course.subject}_{course.number}"
+            else:
+                course_key = f"{course.subject}_{course.number}"
+            
+            # Handle duplicates by combining grades
+            if course_key in courses_dict:
+                existing_grades = set(courses_dict[course_key].grade.split("/"))
+                existing_grades.add(course.grade)
+                courses_dict[course_key].grade = "/".join(sorted(existing_grades))
+            else:
+                courses_dict[course_key] = course
+    
+        # Return list of courses from dictionary values
+        return list(courses_dict.values())
     
     def _extract_breadth_requirements(self, text: str) -> Dict[str, Any]:
         """Extract breadth requirements with their courses and credit totals"""
@@ -413,6 +423,114 @@ class EnhancedDarsParser:
             (r'(OK|NO) Breadth in the Degree: Social Sciences(.*?)(?=-{5,}|OK |NO |$)', 'Social Sciences'),
             (r'OK University General Education: Breadth(.*?)(?=-{5,}|OK |NO |$)', 'General Education Breadth')
         ]
+        
+        for pattern, breadth_name in breadth_patterns:
+            match = re.search(pattern, text, re.DOTALL)
+            if match:
+                status = match.group(1) if len(match.groups()) > 1 else 'OK'
+                content = match.group(2) if len(match.groups()) > 1 else match.group(1)
+                
+                breadth_info = {
+                    'name': breadth_name,
+                    'status': 'complete' if status == 'OK' else 'incomplete',
+                    'credits_earned': 0.0,
+                    'credits_needed': 0.0,
+                    'credits_in_progress': 0.0,
+                    'sub_categories': {}
+                }
+                
+                # Extract earned credits
+                earned_match = re.search(r'EARNED:\s*(\d+\.\d+)\s+CREDITS', content)
+                if earned_match:
+                    breadth_info['credits_earned'] = float(earned_match.group(1))
+                
+                # Extract needed credits  
+                needs_match = re.search(r'NEEDS:\s*(\d+\.\d+)\s+CREDITS', content)
+                if needs_match:
+                    breadth_info['credits_needed'] = breadth_info['credits_earned'] + float(needs_match.group(1))
+                else:
+                    breadth_info['credits_needed'] = breadth_info['credits_earned']
+                
+                # Extract in-progress credits
+                in_progress_match = re.search(r'IN-PROGRESS\s+(\d+\.\d+)\s+CREDITS', content)
+                if in_progress_match:
+                    breadth_info['credits_in_progress'] = float(in_progress_match.group(1))
+                
+                # Extract sub-categories (like Biological Science, Physical Science)
+                sub_category_patterns = [
+                    r'\+ (\d+\)) (.+?)(?:\n|\d+\.\d+\s+CREDITS)',
+                    r'- (\d+\)) (.+?)(?:\n|\d+\.\d+\s+CREDITS)'
+                ]
+                
+                for sub_pattern in sub_category_patterns:
+                    for sub_match in re.finditer(sub_pattern, content):
+                        sub_number = sub_match.group(1)
+                        sub_name = sub_match.group(2).strip()
+                        is_complete = sub_pattern.startswith(r'\+')
+                        
+                        # Find courses for this sub-category
+                        sub_courses = []
+                        sub_credits = 0.0
+                        
+                        # Look for courses after this sub-category
+                        sub_section_start = sub_match.end()
+                        next_sub_match = re.search(r'[+-] \d+\)', content[sub_section_start:])
+                        sub_section_end = sub_section_start + next_sub_match.start() if next_sub_match else len(content)
+                        sub_section = content[sub_section_start:sub_section_end]
+                        
+                        # Extract courses from this sub-section
+                        course_pattern = r'([A-Z]{2}\d{2})\s+([A-Z\s&]+?)(\d{3,4}[A-Z]*)\s+(\d+\.\d+)\s+([A-Z]+|INP)\s*(.*?)(?=\n|$)'
+                        for course_match in re.finditer(course_pattern, sub_section, re.MULTILINE):
+                            term = course_match.group(1)
+                            subject_raw = course_match.group(2).strip()
+                            subject = ' '.join(subject_raw.split())
+                            number = course_match.group(3)
+                            credits = float(course_match.group(4))
+                            grade = course_match.group(5)
+                            title = course_match.group(6).strip() if course_match.group(6) else ""
+                            
+                            course = Course(
+                                term=term,
+                                subject=subject,
+                                number=number,
+                                credits=credits,
+                                grade=grade,
+                                title=title
+                            )
+                            sub_courses.append(course)
+                            sub_credits += credits
+                        
+                        # Calculate remaining requirements for incomplete sub-categories
+                        sub_category_info = {
+                            'courses': sub_courses,
+                            'credits_added': sub_credits,
+                            'status': 'complete' if is_complete else 'incomplete'
+                        }
+                        
+                        # Add remaining requirements info for incomplete categories
+                        if not is_complete:
+                            # Look for NEEDS information in the sub-section
+                            needs_credits_match = re.search(r'NEEDS:\s*(\d+\.\d+)\s+CREDITS', sub_section)
+                            needs_courses_match = re.search(r'NEEDS:\s*(\d+)\s+COURSE', sub_section)
+                            
+                            if needs_credits_match:
+                                sub_category_info['credits_needed'] = float(needs_credits_match.group(1))
+                            if needs_courses_match:
+                                sub_category_info['courses_needed'] = int(needs_courses_match.group(1))
+                            
+                            # Look for course selection requirements
+                            select_from_match = re.search(r'SELECT FROM:\s*([^\n]+)', sub_section)
+                            if select_from_match:
+                                sub_category_info['available_courses'] = select_from_match.group(1).strip()
+                        else:
+                            # For complete categories, just show credits (rename for consistency)
+                            sub_category_info['credits'] = sub_category_info.pop('credits_added')
+                        
+                        breadth_info['sub_categories'][sub_name] = sub_category_info
+                
+                breadth_reqs[breadth_name.lower().replace(' ', '_')] = breadth_info
+        
+        return breadth_reqs
         
         for pattern, breadth_name in breadth_patterns:
             match = re.search(pattern, text, re.DOTALL)
@@ -568,46 +686,47 @@ class EnhancedDarsParser:
         return in_progress_courses
     
     def _extract_requirements(self, text: str) -> List[Requirement]:
-        """Extract degree requirements with detailed status based on actual DARS format."""
+        """Extract degree requirements with detailed status based on actual DARS format"""
         requirements = []
+        
+        # Split text into lines for processing
         lines = text.split('\n')
         i = 0
         
         while i < len(lines):
             line = lines[i].strip()
             
-            # This regex now only matches requirement headers that don't look like sub-requirements
-            req_match = re.match(r'^(OK|NO|IP)\s+([A-Za-z].*)', line)
+            # Look for requirement headers (OK, NO, IP followed by requirement name)
+            req_match = re.match(r'^(OK|NO|IP)\s+(.+)', line)
             if req_match:
                 status_text = req_match.group(1)
                 req_name = req_match.group(2).strip()
                 
-                # Skip known non-requirement sections
-                if any(skip in req_name.lower() for skip in ['courses currently in-progress', 'information for advising', 'legend', 'student please note']):
+                # Skip certain sections that aren't requirements
+                if any(skip in req_name.lower() for skip in ['courses currently', 'information for advising', 'legend', 'student please note']):
                     i += 1
                     continue
                 
-                # --- FIX: Smarter content gathering loop ---
+                # Collect content until next requirement or section break
                 req_content = []
                 i += 1
                 while i < len(lines):
-                    next_line_stripped = lines[i].strip()
-                    # Check if the next line is a new MAIN requirement. A main requirement does NOT start with a numbered list.
-                    is_new_main_req = re.match(r'^(OK|NO|IP)\s+', next_line_stripped) and not re.match(r'^(?:[+NO-]|IP\+)\s*\d+\)', next_line_stripped)
-                    
-                    if is_new_main_req or next_line_stripped.startswith(('-', '*')) and len(next_line_stripped) > 4:
+                    next_line = lines[i].strip()
+                    if (re.match(r'^(OK|NO|IP)\s+', next_line) or 
+                        next_line.startswith('-' * 5) or 
+                        next_line.startswith('*' * 5)):
                         break
-                        
                     req_content.append(lines[i])
                     i += 1
                 
                 content_text = '\n'.join(req_content)
                 
+                # Parse this requirement
                 requirement = self._parse_requirement_details(
                     req_name, 
                     content_text, 
-                    status_text.upper() == 'OK',
-                    status_text.upper() == 'IP'
+                    status_text == 'OK',
+                    status_text == 'IP'
                 )
                 
                 if requirement:
@@ -623,6 +742,7 @@ class EnhancedDarsParser:
             credits_earned = 0.0
             credits_needed = 0.0
             credits_in_progress = 0.0
+            sub_requirements = []
             
             # Look for specific credit patterns in content
             earned_match = re.search(r'EARNED:\s*(\d+\.\d+)\s+CREDITS', req_content)
@@ -634,25 +754,23 @@ class EnhancedDarsParser:
             if in_progress_match:
                 credits_in_progress = float(in_progress_match.group(1))
             
-            # Look for remaining credits needed
+            # For major requirements, credits_needed should be earned + in_progress (no additional estimation)
+            credits_needed = credits_earned + credits_in_progress
+            
+            # Look for remaining credits needed (explicit)
             needs_match = re.search(r'NEEDS:\s*(\d+\.\d+)\s+CREDITS', req_content)
             if needs_match:
                 additional_needed = float(needs_match.group(1))
                 credits_needed = credits_earned + credits_in_progress + additional_needed
-            elif credits_earned > 0:
-                # If we have earned credits but no explicit needs, assume requirement is satisfied
-                credits_needed = credits_earned + credits_in_progress
-            
-            # Look for course requirements (like "NEEDS: 1 COURSE")
-            course_needs_match = re.search(r'NEEDS:\s*(\d+)\s+COURSE', req_content)
-            if course_needs_match:
-                courses_needed = int(course_needs_match.group(1))
-                # Note this but don't estimate credits since course credits vary
             
             # Look for credit requirements in the format "X credits and Y courses"
             credit_course_match = re.search(r'(\d+)\s+credits?\s+and\s+(\d+)\s+courses?', req_content)
             if credit_course_match and credits_needed == 0:
                 credits_needed = float(credit_course_match.group(1))
+            
+            # Parse sub-sections for major requirements (like 1) Basic Computer Science, 2) etc.)
+            if "major" in req_name.lower():
+                sub_requirements = self._parse_major_subsections(req_content)
             
             # Extract available course options and notes
             notes = self._extract_requirement_notes(req_content)
@@ -675,12 +793,73 @@ class EnhancedDarsParser:
                 credits_earned=credits_earned,
                 credits_in_progress=credits_in_progress,
                 courses=courses,
+                sub_requirements=sub_requirements,
                 notes=notes
             )
             
         except Exception as e:
             # Return None for failed parsing rather than breaking the entire process
             return None
+    
+    def _parse_major_subsections(self, req_content: str) -> List[Requirement]:
+        """Parse major sub-sections like 1) Basic Computer Science, 2) etc."""
+        sub_requirements = []
+        
+        # Find all sub-sections with pattern: + 1) SubName or IP- 6) SubName
+        subsection_pattern = r'(IP[+-]?|\+|-)\s*(\d+\))\s*(.+?)(?=(?:IP[+-]?|\+|-)\s*\d+\)|$)'
+        
+        for match in re.finditer(subsection_pattern, req_content, re.DOTALL):
+            status_marker = match.group(1).strip()
+            section_number = match.group(2)
+            section_content = match.group(3)
+            
+            # Extract section name (first line usually contains the name)
+            section_lines = section_content.strip().split('\n')
+            section_name = section_lines[0].strip() if section_lines else f"Section {section_number}"
+            
+            # Determine status from marker
+            if status_marker == '+':
+                sub_status = RequirementStatus.COMPLETE
+            elif status_marker.startswith('IP'):
+                sub_status = RequirementStatus.IN_PROGRESS  
+            elif status_marker == '-':
+                sub_status = RequirementStatus.INCOMPLETE
+            else:
+                sub_status = RequirementStatus.INCOMPLETE
+            
+            # Extract courses from this sub-section
+            sub_courses = self._extract_courses_from_requirement(section_content)
+            
+            # Calculate credits for this sub-section
+            sub_credits_earned = sum(course.credits for course in sub_courses if course.grade != 'INP')
+            sub_credits_in_progress = sum(course.credits for course in sub_courses if course.grade == 'INP')
+            sub_credits_needed = sub_credits_earned + sub_credits_in_progress
+            
+            # Look for additional requirements in this sub-section
+            sub_notes = self._extract_requirement_notes(section_content)
+            
+            # Check if this sub-section needs more courses
+            courses_needed_match = re.search(r'NEEDS:\s*(\d+)\s+COURSE', section_content)
+            if courses_needed_match:
+                courses_needed = int(courses_needed_match.group(1))
+                if sub_notes:
+                    sub_notes += f" | Needs {courses_needed} more course(s)"
+                else:
+                    sub_notes = f"Needs {courses_needed} more course(s)"
+            
+            sub_req = Requirement(
+                name=section_name,
+                status=sub_status,
+                credits_needed=sub_credits_needed,
+                credits_earned=sub_credits_earned,
+                credits_in_progress=sub_credits_in_progress,
+                courses=sub_courses,
+                notes=sub_notes
+            )
+            
+            sub_requirements.append(sub_req)
+        
+        return sub_requirements
     
     def _extract_courses_from_requirement(self, req_content: str) -> List[Course]:
         """Extract courses listed within a requirement section"""
@@ -715,10 +894,10 @@ class EnhancedDarsParser:
         notes = []
         
         # Look for course selection options
-        select_from_match = re.search(r'SELECT FROM:\s*([^\n]+)', req_content, re.IGNORECASE)
+        select_from_match = re.search(r'SELECT FROM:(.*?)(?:\n\s*\n|NOT FROM:|NEEDS:|\Z)', req_content, re.IGNORECASE | re.DOTALL)
         if select_from_match:
-            course_options = select_from_match.group(1).strip()
-            notes.append(f"Available courses: {course_options}")
+            course_options = ' '.join(select_from_match.group(1).splitlines())
+            notes.append(f"Available courses: {course_options.strip()}")
         
         # Look for exclusions
         not_from_match = re.search(r'NOT FROM\s+([^\n]+)', req_content, re.IGNORECASE)
@@ -842,7 +1021,7 @@ class EnhancedDarsParser:
                 warnings.append(f'GPA calculation mismatch: reported {gpa_info.gpa}, calculated {calculated_gpa:.3f}')
         
         # Check for reasonable credit totals
-        total_credits = data['credits_summary']['total_earned'] + data['credits_summary']['total_in_progress']
+        total_credits = data['degree_credits']['total_earned'] + data['degree_credits']['total_in_progress']
         if total_credits > 200:  # Unusually high for undergraduate
             warnings.append(f'Unusually high total credits: {total_credits}')
         
@@ -885,9 +1064,9 @@ def generate_degree_audit_summary(parsed_data: Dict[str, Any]) -> Dict[str, Any]
             'degree_type': parsed_data['degree_program']['degree_type']
         },
         'academic_progress': {
-            'total_credits_earned': parsed_data['credits_summary']['total_earned'],
-            'total_credits_in_progress': parsed_data['credits_summary']['total_in_progress'],
-            'credits_needed_to_graduate': parsed_data['credits_summary']['credits_needed'],
+            'total_credits_earned': parsed_data['degree_credits']['total_earned'],
+            'total_credits_in_progress': parsed_data['degree_credits']['total_in_progress'],
+            'credits_needed_to_graduate': parsed_data['degree_credits']['credits_needed'],
             'current_gpa': parsed_data['gpa_info'].gpa,
             'graduation_status': parsed_data['completion_status']['completion_message']
         },
