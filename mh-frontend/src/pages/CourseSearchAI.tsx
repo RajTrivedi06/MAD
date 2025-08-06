@@ -10,6 +10,8 @@ import {
   Sparkles,
   TrendingUp,
   RefreshCw,
+  Send,
+  Bot,
 } from "lucide-react";
 import { useCourses } from "@/hooks/useCourses";
 import {
@@ -247,6 +249,123 @@ const CourseCard = ({
   );
 };
 
+// AI Interest Input Component
+const AIInterestInput = ({
+  aiInterest,
+  setAiInterest,
+  onSubmit,
+  isProcessing = false,
+  breadthRequirements = [],
+  genEdRequirements = [],
+}: {
+  aiInterest: string;
+  setAiInterest: (value: string) => void;
+  onSubmit: () => void;
+  isProcessing?: boolean;
+  breadthRequirements?: string[];
+  genEdRequirements?: string[];
+}) => {
+  const [selectedUnfulfilledReq, setSelectedUnfulfilledReq] =
+    useState<string>("");
+
+  // Combine breadth and gen ed requirements for the dropdown
+  const unfulfilledRequirements = [
+    ...breadthRequirements.map((req) => `Breadth: ${req}`),
+    ...genEdRequirements.map((req) => `General Education: ${req}`),
+  ];
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (aiInterest.trim()) {
+      onSubmit();
+    }
+  };
+
+  const handleKeyPress = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      handleSubmit(e);
+    }
+  };
+
+  const handleUnfulfilledReqChange = (
+    e: React.ChangeEvent<HTMLSelectElement>
+  ) => {
+    const selected = e.target.value;
+    setSelectedUnfulfilledReq(selected);
+    // No automatic insertion into the textbox
+  };
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, height: 0 }}
+      animate={{ opacity: 1, height: "auto" }}
+      exit={{ opacity: 0, height: 0 }}
+      transition={{ duration: 0.3 }}
+      className="bg-gradient-to-r from-gray-50 to-gray-100 border border-red-200 rounded-lg p-4 mb-4"
+    >
+      <div className="flex items-start gap-3">
+        <div className="flex-shrink-0 p-2 bg-red-600 rounded-full">
+          <Bot className="w-4 h-4 text-white" />
+        </div>
+        <div className="flex-1">
+          <h3 className="font-semibold text-red-900 mb-2 flex items-center gap-2">
+            <Sparkles className="w-4 h-4" />
+            Tell AI About Your Interests
+          </h3>
+          <form onSubmit={handleSubmit} className="space-y-3">
+            {/* Unfulfilled Requirements Dropdown */}
+            <div>
+              <label className="block text-sm font-medium text-red-800 mb-2">
+                Add Unfulfilled Requirements
+              </label>
+              <select
+                value={selectedUnfulfilledReq}
+                onChange={handleUnfulfilledReqChange}
+                className="w-full px-3 py-2 border border-red-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500 text-sm bg-white"
+                disabled={isProcessing}
+              >
+                <option value="">Select an unfulfilled requirement...</option>
+                {unfulfilledRequirements.map((requirement) => (
+                  <option key={requirement} value={requirement}>
+                    {requirement}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="relative">
+              <textarea
+                value={aiInterest}
+                onChange={(e) => setAiInterest(e.target.value)}
+                onKeyPress={handleKeyPress}
+                placeholder="Describe your academic interests, career goals, or subjects you'd like to explore... (e.g., 'I'm interested in machine learning and data science, looking for courses that combine programming with statistics')"
+                className="w-full px-4 py-3 pr-12 border border-red-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500 resize-none text-sm"
+                rows={3}
+                disabled={isProcessing}
+              />
+              <button
+                type="submit"
+                disabled={!aiInterest.trim() || isProcessing}
+                className="absolute bottom-3 right-3 p-1.5 bg-red-600 text-white rounded-full hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                {isProcessing ? (
+                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                ) : (
+                  <Send className="w-4 h-4" />
+                )}
+              </button>
+            </div>
+            <p className="text-xs text-red-700">
+              Press Enter to submit, or Shift+Enter for new line
+            </p>
+          </form>
+        </div>
+      </div>
+    </motion.div>
+  );
+};
+
 // Main Component
 export function CourseSearchAI() {
   const [selectedCourse, setSelectedCourse] =
@@ -255,6 +374,8 @@ export function CourseSearchAI() {
     new Set()
   );
   const [aiMode, setAiMode] = useState(false);
+  const [aiInterest, setAiInterest] = useState("");
+  const [isProcessingAI, setIsProcessingAI] = useState(false);
   const [currentPage, setCurrentPage] = useState(0);
   const pageSize = 50;
 
@@ -372,6 +493,29 @@ export function CourseSearchAI() {
     });
     setSearchQuery("");
     setCurrentPage(0);
+  };
+
+  const handleAISubmit = async () => {
+    if (!aiInterest.trim()) return;
+
+    setIsProcessingAI(true);
+    try {
+      // Here you would typically send the AI interest to your backend
+      // For now, we'll simulate the API call
+      console.log("Sending AI interest:", aiInterest);
+
+      // Simulate API call delay
+      await new Promise((resolve) => setTimeout(resolve, 2000));
+
+      // Here you would process the AI response and update filters or recommendations
+      // For example, you might get recommended subjects or keywords back from AI
+
+      console.log("AI processing complete");
+    } catch (error) {
+      console.error("AI processing error:", error);
+    } finally {
+      setIsProcessingAI(false);
+    }
   };
 
   return (
@@ -614,6 +758,22 @@ export function CourseSearchAI() {
               </div>
             </div>
           </div>
+
+          {/* AI Interest Input - Shows only when AI Mode is on */}
+          <AnimatePresence>
+            {aiMode && (
+              <div className="px-8 py-4 bg-gray-50">
+                <AIInterestInput
+                  aiInterest={aiInterest}
+                  setAiInterest={setAiInterest}
+                  onSubmit={handleAISubmit}
+                  isProcessing={isProcessingAI}
+                  breadthRequirements={breadthRequirements}
+                  genEdRequirements={genEdRequirements}
+                />
+              </div>
+            )}
+          </AnimatePresence>
 
           {/* Results Summary */}
           <div className="bg-gray-50 px-8 py-3 border-b border-gray-200">
