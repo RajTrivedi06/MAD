@@ -5,6 +5,9 @@ import { QueryProvider } from "../providers/QueryProvider";
 import { AuthProvider } from "../contexts/AuthContext";
 import Navigation from "../components/Navigation";
 import Footer from "../components/Footer";
+import { RoutingDebug } from "../components/RoutingDebug";
+import { ErrorBoundary } from "../components/ErrorBoundary";
+import { AccountsDebug } from "../components/AccountsDebug";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -34,11 +37,19 @@ export default function RootLayout({
       >
         <QueryProvider>
           <AuthProvider>
-            <div className="min-h-screen flex flex-col">
-              <Navigation />
-              <main className="flex-1">{children}</main>
-              <Footer />
-            </div>
+            <ErrorBoundary>
+              <div className="min-h-screen flex flex-col">
+                <Navigation />
+                <main className="flex-1 pt-16">{children}</main>
+                <Footer />
+                {process.env.NODE_ENV === "development" && (
+                  <>
+                    <RoutingDebug />
+                    <AccountsDebug />
+                  </>
+                )}
+              </div>
+            </ErrorBoundary>
           </AuthProvider>
         </QueryProvider>
       </body>

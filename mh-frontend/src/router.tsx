@@ -12,6 +12,9 @@ import { RegisterPage } from "./pages/auth/RegisterPage";
 import { AuthCallback } from "./pages/auth/AuthCallback";
 import { AccountsPage } from "./pages/AccountsPage";
 import { RaFinderPage } from "./features/ra-finder/RaFinderPage";
+import TestPrereqGraph from "./pages/TestPrereqGraph";
+import D3ReactFlowTestPage from "./pages/d3-reactflow-test";
+import MinimalReactFlowTest from "./pages/minimal-reactflow-test";
 
 const rootRoute = createRootRoute({
   component: RootLayout,
@@ -27,12 +30,6 @@ const courseSearchRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/course-search",
   component: CourseSearchAI,
-});
-
-const raFeatureRoute = createRoute({
-  getParentRoute: () => rootRoute,
-  path: "/ra-feature",
-  component: RAFeature,
 });
 
 const loginRoute = createRoute({
@@ -65,15 +62,35 @@ const accountsRoute = createRoute({
   component: AccountsPage,
 });
 
+const testPrereqGraphRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/test-prereq-graph",
+  component: TestPrereqGraph,
+});
+
+const d3ReactFlowTestRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/d3-reactflow-test",
+  component: D3ReactFlowTestPage,
+});
+
+const minimalReactFlowTestRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/minimal-reactflow-test",
+  component: MinimalReactFlowTest,
+});
+
 const routeTree = rootRoute.addChildren([
   indexRoute,
   courseSearchRoute,
-  raFeatureRoute,
+  raFinderRoute,
   loginRoute,
   registerRoute,
   authCallbackRoute,
-  raFinderRoute,
   accountsRoute,
+  testPrereqGraphRoute,
+  d3ReactFlowTestRoute,
+  minimalReactFlowTestRoute,
 ]);
 
 export const router = createRouter({ routeTree });

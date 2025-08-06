@@ -4,6 +4,9 @@ from fastapi.responses import JSONResponse
 from app.routes.dars_routes import router as dars_router
 from app.routes.cv_routes import router as cv_router
 from app.routes.testing_routes import router as testing_router
+from app.routes.profile_routes import router as profile_router
+from app.routes.ra_routes import router as ra_router
+from app.routes.prerequisite_routes import router as prerequisite_router
 import logging
 import os
 from datetime import datetime
@@ -46,6 +49,9 @@ app.add_middleware(
 app.include_router(dars_router, prefix="/api/dars", tags=["DARS"])
 app.include_router(cv_router, prefix="/api/cv", tags=["CV"])
 app.include_router(testing_router, prefix="/testing", tags=["Testing"])
+app.include_router(profile_router, prefix="/api/profile", tags=["Profile"])
+app.include_router(ra_router, prefix="/api/ra", tags=["RA Finder"])
+app.include_router(prerequisite_router, prefix="/api", tags=["Prerequisites"])
 
 @app.get("/")
 async def root():
@@ -64,6 +70,9 @@ async def root():
             "dars": "/api/dars",
             "cv": "/api/cv", 
             "testing": "/testing",
+            "profile": "/api/profile",
+            "ra": "/api/ra",
+            "prerequisites": "/api/prerequisites",
             "docs": "/docs",
             "health": "/health"
         },

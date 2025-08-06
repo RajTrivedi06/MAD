@@ -13,6 +13,55 @@ export type Database = {
           dars_data: any | null;
           cv_data: any | null;
           processing_status: any | null;
+          profile_summary: {
+            academic_profile: {
+              major: string;
+              expected_graduation: string;
+              gpa: number;
+              academic_standing: string;
+              completed_credits: number;
+              in_progress_credits: number;
+            };
+            technical_expertise: {
+              programming_languages: {
+                proficient: string[];
+                familiar: string[];
+              };
+              frameworks_tools: {
+                frontend: string[];
+                backend: string[];
+                data_science: string[];
+                development: string[];
+              };
+              specialized_skills: string[];
+            };
+            academic_strengths: {
+              core_competencies: string[];
+              coursework_highlights: {
+                advanced_cs: string[];
+                machine_learning: string[];
+                data_science: string[];
+                interdisciplinary: string[];
+              };
+            };
+            research_interests: string[];
+            professional_experience: {
+              current_roles: Array<{
+                title: string;
+                focus: string;
+                impact: string;
+              }>;
+              project_highlights: Array<{
+                name: string;
+                type: string;
+                technologies: string[];
+                relevance: string;
+              }>;
+            };
+            unique_value_proposition: string;
+            ideal_research_areas: string[];
+            generated_at?: string;
+          } | null;
           created_at: string;
           updated_at: string;
         };
@@ -27,6 +76,55 @@ export type Database = {
           dars_data?: any | null;
           cv_data?: any | null;
           processing_status?: any | null;
+          profile_summary?: {
+            academic_profile: {
+              major: string;
+              expected_graduation: string;
+              gpa: number;
+              academic_standing: string;
+              completed_credits: number;
+              in_progress_credits: number;
+            };
+            technical_expertise: {
+              programming_languages: {
+                proficient: string[];
+                familiar: string[];
+              };
+              frameworks_tools: {
+                frontend: string[];
+                backend: string[];
+                data_science: string[];
+                development: string[];
+              };
+              specialized_skills: string[];
+            };
+            academic_strengths: {
+              core_competencies: string[];
+              coursework_highlights: {
+                advanced_cs: string[];
+                machine_learning: string[];
+                data_science: string[];
+                interdisciplinary: string[];
+              };
+            };
+            research_interests: string[];
+            professional_experience: {
+              current_roles: Array<{
+                title: string;
+                focus: string;
+                impact: string;
+              }>;
+              project_highlights: Array<{
+                name: string;
+                type: string;
+                technologies: string[];
+                relevance: string;
+              }>;
+            };
+            unique_value_proposition: string;
+            ideal_research_areas: string[];
+            generated_at?: string;
+          } | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -41,6 +139,55 @@ export type Database = {
           dars_data?: any | null;
           cv_data?: any | null;
           processing_status?: any | null;
+          profile_summary?: {
+            academic_profile: {
+              major: string;
+              expected_graduation: string;
+              gpa: number;
+              academic_standing: string;
+              completed_credits: number;
+              in_progress_credits: number;
+            };
+            technical_expertise: {
+              programming_languages: {
+                proficient: string[];
+                familiar: string[];
+              };
+              frameworks_tools: {
+                frontend: string[];
+                backend: string[];
+                data_science: string[];
+                development: string[];
+              };
+              specialized_skills: string[];
+            };
+            academic_strengths: {
+              core_competencies: string[];
+              coursework_highlights: {
+                advanced_cs: string[];
+                machine_learning: string[];
+                data_science: string[];
+                interdisciplinary: string[];
+              };
+            };
+            research_interests: string[];
+            professional_experience: {
+              current_roles: Array<{
+                title: string;
+                focus: string;
+                impact: string;
+              }>;
+              project_highlights: Array<{
+                name: string;
+                type: string;
+                technologies: string[];
+                relevance: string;
+              }>;
+            };
+            unique_value_proposition: string;
+            ideal_research_areas: string[];
+            generated_at?: string;
+          } | null;
           created_at?: string;
           updated_at?: string;
         };

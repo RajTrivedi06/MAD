@@ -1,152 +1,199 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Search,
   ChevronDown,
-  ChevronRight,
   Clock,
   Users,
   BookOpen,
   AlertCircle,
   Sparkles,
-  Filter,
-  X,
-  Building2,
-  GraduationCap,
-  Globe,
-  Calendar,
-  Hash,
-  Layers,
-  Award,
-  Languages,
-  CheckCircle,
-  Info,
-  ExternalLink,
   TrendingUp,
-  School,
-  Loader2,
+  RefreshCw,
 } from "lucide-react";
-import * as d3 from "d3";
 import { useCourses } from "@/hooks/useCourses";
-import { useColleges } from "@/hooks/useColleges";
+import {
+  useCourseSubjects,
+  useTerms,
+  useColleges,
+  useBreadthRequirements,
+  useGeneralEducationRequirements,
+  useLevels,
+  useCLOAudiences,
+} from "@/hooks/useFilterOptions";
 import { useCredits } from "@/hooks/useCredits";
 import { useDebouncedSearch } from "@/hooks/useDebouncedSearch";
-import type { Database } from "@/lib/supabase/database.types";
-import type { CourseFilters } from "@/types/course.types";
+import type {
+  CourseFilters,
+  CourseWithRequirements,
+} from "@/types/course.types";
 import { LoadingSpinner } from "@/components/LoadingSpinner";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { InteractiveHoverButton } from "@/components/magicui/interactive-hover-button";
+import { PrerequisiteDisplay } from "@/components/PrerequisiteDisplay";
+import { PrerequisiteJourney } from "@/components/PrerequisiteJourney";
+import { PrerequisiteJourneyWrapper } from "@/components/PrerequisiteJourneyWrapper";
 
-// Types
-type Course = Database["public"]["Tables"]["courses"]["Row"];
+// Filter Section Component
+const FilterSection = ({
+  title,
+  expanded,
+  onToggle,
+  children,
+}: {
+  title: string;
+  expanded: boolean;
+  onToggle: () => void;
+  children: React.ReactNode;
+}) => (
+  <div className="border-b border-gray-200 pb-4">
+    <button
+      onClick={onToggle}
+      className="w-full flex items-center justify-between py-2 text-sm font-medium text-gray-900 hover:text-gray-700"
+    >
+      <span>{title}</span>
+      <ChevronDown
+        className={`w-4 h-4 transition-transform ${
+          expanded ? "rotate-180" : ""
+        }`}
+      />
+    </button>
+    <AnimatePresence>
+      {expanded && (
+        <motion.div
+          initial={{ height: 0, opacity: 0 }}
+          animate={{ height: "auto", opacity: 1 }}
+          exit={{ height: 0, opacity: 0 }}
+          transition={{ duration: 0.2 }}
+          className="overflow-hidden"
+        >
+          <div className="pt-2">{children}</div>
+        </motion.div>
+      )}
+    </AnimatePresence>
+  </div>
+);
 
-interface CourseWithPopularity extends Course {
-  popularity_stats?: {
-    percent_taken: number;
-    student_count: number;
-    requirement: string | null;
-  }[];
-}
-
-interface FilterOption {
-  label: string;
-  value: string;
-  expandable: boolean;
-}
-
-// Helper to get topic tags
-const getTopicTags = (courseCode: string | null): string[] => {
-  if (!courseCode) return ["General"];
-
-  const tagMap: Record<string, string[]> = {
-    "COMP SCI": ["AI", "Algorithms", "Programming"],
-    STAT: ["Data Science", "Analytics", "Probability"],
-    ECE: ["Robotics", "Circuits", "Systems"],
-    MATH: ["Calculus", "Linear Algebra", "Theory"],
-    PHYSICS: ["Quantum", "Mechanics", "Nuclear"],
+// Checkbox Group Component
+const CheckboxGroup = ({
+  options,
+  selected,
+  onChange,
+  maxHeight = "max-h-48",
+}: {
+  options: string[];
+  selected: string[];
+  onChange: (values: string[]) => void;
+  maxHeight?: string;
+}) => {
+  const handleChange = (value: string, checked: boolean) => {
+    if (checked) {
+      onChange([...selected, value]);
+    } else {
+      onChange(selected.filter((v) => v !== value));
+    }
   };
-  return tagMap[courseCode] || ["General"];
+
+  return (
+    <div className={`space-y-2 overflow-y-auto ${maxHeight}`}>
+      {options.map((option) => (
+        <label
+          key={option}
+          className="flex items-center gap-2 text-sm cursor-pointer hover:text-gray-700"
+        >
+          <input
+            type="checkbox"
+            checked={selected.includes(option)}
+            onChange={(e) => handleChange(option, e.target.checked)}
+            className="rounded border-gray-300 text-red-600 focus:ring-red-500"
+          />
+          <span className="truncate">{option}</span>
+        </label>
+      ))}
+    </div>
+  );
 };
 
-// Grade distribution chart
-const GradeDistributionChart = ({ courseId }: { courseId: number }) => {
-  useEffect(() => {
-    const data = [
-      { grade: "A", count: 45 },
-      { grade: "AB", count: 35 },
-      { grade: "B", count: 25 },
-      { grade: "BC", count: 15 },
-      { grade: "C", count: 10 },
-      { grade: "D", count: 5 },
-      { grade: "F", count: 2 },
-    ];
+// Searchable Checkbox Group Component
+const SearchableCheckboxGroup = ({
+  options,
+  selected,
+  onChange,
+  maxHeight = "max-h-48",
+  placeholder = "Search...",
+}: {
+  options: string[];
+  selected: string[];
+  onChange: (values: string[]) => void;
+  maxHeight?: string;
+  placeholder?: string;
+}) => {
+  const [searchQuery, setSearchQuery] = useState("");
 
-    const margin = { top: 20, right: 20, bottom: 40, left: 40 };
-    const width = 300 - margin.left - margin.right;
-    const height = 200 - margin.top - margin.bottom;
+  const handleChange = (value: string, checked: boolean) => {
+    if (checked) {
+      onChange([...selected, value]);
+    } else {
+      onChange(selected.filter((v) => v !== value));
+    }
+  };
 
-    const container = d3.select(`#grade-chart-${courseId}`);
-    container.selectAll("*").remove();
+  // Filter options based on search query
+  const filteredOptions = options.filter((option) =>
+    option.toLowerCase().includes(searchQuery.toLowerCase())
+  );
 
-    const svg = container
-      .append("svg")
-      .attr("width", width + margin.left + margin.right)
-      .attr("height", height + margin.top + margin.bottom)
-      .append("g")
-      .attr("transform", `translate(${margin.left},${margin.top})`);
+  return (
+    <div className="space-y-3">
+      {/* Search Input */}
+      <div className="relative">
+        <input
+          type="text"
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          placeholder={placeholder}
+          className="w-full px-3 py-2 pl-9 border border-gray-300 rounded-md focus:ring-red-500 focus:border-red-500 text-sm"
+        />
+        <Search className="absolute left-3 top-2.5 w-4 h-4 text-gray-400" />
+      </div>
 
-    const x = d3
-      .scaleBand()
-      .range([0, width])
-      .domain(data.map((d) => d.grade))
-      .padding(0.1);
-
-    const y = d3
-      .scaleLinear()
-      .domain([0, d3.max(data, (d) => d.count) || 0])
-      .range([height, 0]);
-
-    svg
-      .selectAll(".bar")
-      .data(data)
-      .enter()
-      .append("rect")
-      .attr("class", "bar")
-      .attr("x", (d) => x(d.grade) || 0)
-      .attr("width", x.bandwidth())
-      .attr("y", (d) => y(d.count))
-      .attr("height", (d) => height - y(d.count));
-
-    svg
-      .append("g")
-      .attr("transform", `translate(0,${height})`)
-      .call(d3.axisBottom(x));
-    svg.append("g").call(d3.axisLeft(y));
-  }, [courseId]);
-
-  return <div id={`grade-chart-${courseId}`} className="w-full"></div>;
+      {/* Checkbox List */}
+      <div className={`space-y-2 overflow-y-auto ${maxHeight}`}>
+        {filteredOptions.length === 0 ? (
+          <p className="text-sm text-gray-500 text-center py-2">
+            No subjects found matching &quot;{searchQuery}&quot;
+          </p>
+        ) : (
+          filteredOptions.map((option) => (
+            <label
+              key={option}
+              className="flex items-center gap-2 text-sm cursor-pointer hover:text-gray-700"
+            >
+              <input
+                type="checkbox"
+                checked={selected.includes(option)}
+                onChange={(e) => handleChange(option, e.target.checked)}
+                className="rounded border-gray-300 text-red-600 focus:ring-red-500"
+              />
+              <span className="truncate">{option}</span>
+            </label>
+          ))
+        )}
+      </div>
+    </div>
+  );
 };
 
-// Course card
+// Course Card Component
 const CourseCard = ({
   course,
   selected,
   onSelect,
-  showRelevance = false,
 }: {
-  course: CourseWithPopularity;
+  course: CourseWithRequirements;
   selected: boolean;
   onSelect: () => void;
-  showRelevance?: boolean;
 }) => {
-  const tagColors: Record<string, string> = {
-    AI: "bg-red-100 text-red-700",
-    Cars: "bg-green-100 text-green-700",
-    Nuclear: "bg-blue-100 text-blue-700",
-    "Data Science": "bg-purple-100 text-purple-700",
-    Robotics: "bg-yellow-100 text-yellow-700",
-    Default: "bg-gray-100 text-gray-700",
-  };
-
-  const topicTags = getTopicTags(course.course_code);
   const popularityStats = course.popularity_stats?.[0];
 
   return (
@@ -156,117 +203,103 @@ const CourseCard = ({
       onClick={onSelect}
       className={`relative p-4 bg-white rounded-xl shadow-sm border-2 cursor-pointer transition-all ${
         selected
-          ? "border-blue-500 shadow-md"
+          ? "border-red-500 shadow-md"
           : "border-transparent hover:shadow-md"
       }`}
     >
       <div className="flex justify-between items-start mb-2">
-        <h3 className="font-bold text-xl text-black">
-          {course.course_code} {course.catalog_number}
-        </h3>
-        <div className="flex gap-2">
-          {topicTags.map((tag: string, i: number) => (
-            <span
-              key={i}
-              className={`px-3 py-1 rounded-full text-xs font-medium ${
-                tagColors[tag] || tagColors.Default
-              }`}
-            >
-              {tag}
-            </span>
-          ))}
-        </div>
+        <h3 className="font-bold text-lg text-black">{course.course_code}</h3>
       </div>
 
-      <p className="text-black text-base mb-3 font-medium">{course.title}</p>
+      <p className="text-black text-base mb-3 font-medium line-clamp-2">
+        {course.title}
+      </p>
 
-      {showRelevance && popularityStats && (
-        <div className="flex items-center gap-2 text-sm text-gray-700">
-          <TrendingUp className="w-4 h-4" />
-          <span>Popularity: {popularityStats.percent_taken?.toFixed(1)}%</span>
-        </div>
-      )}
+      <div className="flex flex-wrap gap-2 mb-3">
+        {course.course_requirements?.breadth_or?.map((breadth, i) => (
+          <span
+            key={i}
+            className="px-2 py-1 bg-red-100 text-red-700 rounded-full text-xs"
+          >
+            {breadth}
+          </span>
+        ))}
+        {course.course_requirements?.gened_and?.map((gened, i) => (
+          <span
+            key={i}
+            className="px-2 py-1 bg-red-100 text-red-700 rounded-full text-xs"
+          >
+            {gened}
+          </span>
+        ))}
+      </div>
 
-      <div className="flex items-center gap-4 text-xs text-gray-700 mt-2">
+      <div className="flex items-center gap-4 text-xs text-gray-700">
         <span className="flex items-center gap-1">
           <Clock className="w-3 h-3" />
           {course.credits} credits
         </span>
-        {popularityStats && (
-          <span className="flex items-center gap-1">
-            <Users className="w-3 h-3" />
-            {popularityStats.student_count} students
-          </span>
+        {course.crosslisted && (
+          <span className="text-red-600 font-medium">Crosslisted</span>
         )}
       </div>
     </motion.div>
   );
 };
 
-// Error and Loading Components
-const ErrorDisplay = ({
-  error,
-  onRetry,
-}: {
-  error: Error;
-  onRetry: () => void;
-}) => (
-  <div className="flex flex-col items-center justify-center py-12">
-    <AlertCircle className="w-12 h-12 text-red-500 mb-4" />
-    <h3 className="text-lg font-semibold text-gray-900 mb-2">
-      Error Loading Courses
-    </h3>
-    <p className="text-gray-600 mb-4">{error.message}</p>
-    <button
-      onClick={onRetry}
-      className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-    >
-      Try Again
-    </button>
-  </div>
-);
-
-const LoadingState = () => (
-  <div className="flex items-center justify-center py-12">
-    <LoadingSpinner size="lg" color="blue" />
-    <span className="ml-2 text-gray-600">Loading courses...</span>
-  </div>
-);
-
-// Main component
-const CourseSearchAIContent = () => {
+// Main Component
+export function CourseSearchAI() {
   const [selectedCourse, setSelectedCourse] =
-    useState<CourseWithPopularity | null>(null);
-  const [selectedCourses, setSelectedCourses] = useState<Set<number>>(
-    new Set()
-  );
-  const [showComparison, setShowComparison] = useState(false);
+    useState<CourseWithRequirements | null>(null);
   const [expandedFilters, setExpandedFilters] = useState<Set<string>>(
     new Set()
   );
-  const [aiMode, setAiMode] = useState(true);
-  const [groupByTopic, setGroupByTopic] = useState(false);
+  const [aiMode, setAiMode] = useState(false);
   const [currentPage, setCurrentPage] = useState(0);
   const pageSize = 50;
 
   // Filters state
   const [filters, setFilters] = useState<CourseFilters>({
     searchQuery: "",
+    catalogNumber: "",
+    term: "Fall 2025",
+    courseCode: [],
     college: [],
-    credits: [],
     level: [],
+    credits: [],
     crosslisted: null,
+    breadth: [],
+    generalEducation: [],
+    repeatable: null,
+    cloAudience: [],
     limit: pageSize,
     offset: 0,
   });
 
-  // Debounced search functionality
+  // Fetch all filter options
+  const { subjects } = useCourseSubjects();
+  const { terms } = useTerms();
+  const { colleges } = useColleges();
+  const { breadthRequirements } = useBreadthRequirements();
+  const { genEdRequirements } = useGeneralEducationRequirements();
+  const { levels } = useLevels();
+  const { credits: availableCredits } = useCredits();
+  const { audiences } = useCLOAudiences();
+
+  // Debug: Log filter options
+  React.useEffect(() => {
+    console.log("Breadth requirements:", breadthRequirements);
+    console.log("Gen Ed requirements:", genEdRequirements);
+  }, [breadthRequirements, genEdRequirements]);
+
+  // Debounced search
   const handleSearch = useCallback((query: string) => {
     setFilters((prev) => ({
       ...prev,
       searchQuery: query,
-      offset: 0, // Reset pagination on search
+      offset: 0,
     }));
+    setCurrentPage(0);
   }, []);
 
   const { searchQuery, setSearchQuery, isSearching } = useDebouncedSearch(
@@ -274,35 +307,20 @@ const CourseSearchAIContent = () => {
     300
   );
 
-  // Fetch data from Supabase
-  const { courses, loading, error, totalCount, refetch } = useCourses({
-    searchQuery: filters.searchQuery,
-    college: filters.college,
-    credits: filters.credits,
-    level: filters.level,
-    crosslisted: filters.crosslisted,
-    limit: pageSize,
-    offset: currentPage * pageSize,
-  });
+  // Fetch courses
+  const { courses, loading, error, totalCount, refetch } = useCourses(filters);
 
-  const { colleges } = useColleges();
-  const { credits: availableCredits } = useCredits();
-
-  const filterOptions = [
-    { label: "College", value: "college", expandable: true },
-    { label: "Credits", value: "credits", expandable: true },
-    { label: "Level", value: "level", expandable: true },
-    { label: "Crosslisted", value: "crosslisted", expandable: true },
-  ];
-
-  const popularTopics = [
-    "AI",
-    "Machine Learning",
-    "Data Science",
-    "Web Development",
-    "Algorithms",
-    "Systems",
-  ];
+  // Debug: Log course data to see what's actually returned
+  React.useEffect(() => {
+    if (courses.length > 0) {
+      console.log("Sample course data:", courses[0]);
+      console.log(
+        "Courses with requirements:",
+        courses.filter((c) => c.course_requirements)
+      );
+      console.log("Total courses:", courses.length);
+    }
+  }, [courses]);
 
   const toggleFilter = (name: string) => {
     setExpandedFilters((prev) => {
@@ -312,79 +330,260 @@ const CourseSearchAIContent = () => {
     });
   };
 
-  const handleCourseSelect = (course: CourseWithPopularity) => {
-    setSelectedCourse(course);
-    if (showComparison) {
-      setSelectedCourses((prev) => {
-        const next = new Set(prev);
-        next.has(course.course_id)
-          ? next.delete(course.course_id)
-          : next.add(course.course_id);
-        return next;
-      });
-    }
-  };
-
   const handleFilterChange = (
-    filterType: string,
-    value: string[] | boolean | null
+    filterType: keyof CourseFilters,
+    value: string | string[] | boolean | null | undefined
   ) => {
     setFilters((prev) => ({
       ...prev,
       [filterType]: value,
     }));
-    setCurrentPage(0); // Reset to first page when filters change
+    setCurrentPage(0);
+  };
+
+  const handleCourseSelect = (course: CourseWithRequirements) => {
+    setSelectedCourse(course);
+  };
+
+  const loadMore = () => {
+    setCurrentPage((prev) => prev + 1);
+    setFilters((prev) => ({
+      ...prev,
+      offset: (currentPage + 1) * pageSize,
+    }));
+  };
+
+  const clearAllFilters = () => {
+    setFilters({
+      searchQuery: "",
+      catalogNumber: "",
+      term: "Fall 2025",
+      courseCode: [],
+      college: [],
+      level: [],
+      credits: [],
+      crosslisted: null,
+      breadth: [],
+      generalEducation: [],
+      repeatable: null,
+      cloAudience: [],
+      limit: pageSize,
+      offset: 0,
+    });
+    setSearchQuery("");
+    setCurrentPage(0);
   };
 
   return (
     <div className="min-h-screen bg-gray-50 text-gray-900">
       <div className="flex h-screen">
-        {/* Sidebar */}
-        <div className="w-64 bg-white border-r border-gray-200 flex flex-col">
-          <div className="p-6 space-y-4 flex-1 overflow-y-auto">
-            {filterOptions.map((f) => (
-              <motion.div
-                key={f.label}
-                initial={{ opacity: 0, x: -20 }}
-                animate={{ opacity: 1, x: 0 }}
-                className="relative"
-              >
-                <button
-                  onClick={() => toggleFilter(f.label)}
-                  className="w-full px-4 py-3 bg-gray-50 rounded-full flex items-center justify-between hover:bg-gray-100 transition-colors"
-                >
-                  <span className="text-sm font-medium text-gray-900">
-                    {f.label}
-                  </span>
-                  <ChevronDown
-                    className="w-4 h-4 text-gray-600"
-                    style={{
-                      transform: expandedFilters.has(f.label)
-                        ? "rotate(180deg)"
-                        : undefined,
-                    }}
-                  />
-                </button>
-              </motion.div>
-            ))}
+        {/* Sidebar with Filters */}
+        <div className="w-80 bg-white border-r border-gray-200 flex flex-col">
+          <div className="p-4 border-b border-gray-200 flex items-center justify-between">
+            <h2 className="text-lg font-semibold text-gray-900">Filters</h2>
+            <button
+              onClick={clearAllFilters}
+              className="text-sm text-red-600 hover:text-red-700 flex items-center gap-1"
+            >
+              <RefreshCw className="w-3 h-3" />
+              Clear all
+            </button>
           </div>
-          {/* User info */}
-          <div className="p-6 border-t border-gray-200">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-gray-300 rounded-full flex items-center justify-center">
-                <span className="text-sm font-medium text-gray-600">AT</span>
-              </div>
-              <div className="flex-1">
-                <p className="text-sm font-medium text-gray-900">
-                  Anuraj Triswamy
-                </p>
-                <p className="text-xs text-gray-600">aditoes@virginia.com</p>
+
+          <div className="flex-1 overflow-y-auto p-4 space-y-4">
+            {/* Term Dropdown */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Term
+              </label>
+              <select
+                value={filters.term || ""}
+                onChange={(e) =>
+                  handleFilterChange("term", e.target.value || undefined)
+                }
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-red-500 focus:border-red-500 text-sm"
+              >
+                {terms.map((term) => (
+                  <option key={term} value={term}>
+                    {term}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Add by Class Number */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Add by Class Number
+              </label>
+              <input
+                type="text"
+                value={filters.catalogNumber || ""}
+                onChange={(e) =>
+                  handleFilterChange("catalogNumber", e.target.value)
+                }
+                placeholder="e.g., 300, 577"
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-red-500 focus:border-red-500 text-sm"
+              />
+            </div>
+
+            {/* Keywords Search */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Keywords
+              </label>
+              <div className="relative">
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Search courses..."
+                  className="w-full px-3 py-2 pl-9 border border-gray-300 rounded-md focus:ring-red-500 focus:border-red-500 text-sm"
+                />
+                <Search className="absolute left-3 top-2.5 w-4 h-4 text-gray-400" />
               </div>
             </div>
+
+            {/* Subject Filter */}
+            <FilterSection
+              title="Subject"
+              expanded={expandedFilters.has("subject")}
+              onToggle={() => toggleFilter("subject")}
+            >
+              <SearchableCheckboxGroup
+                options={subjects}
+                selected={filters.courseCode || []}
+                onChange={(values) => handleFilterChange("courseCode", values)}
+                maxHeight="max-h-48"
+                placeholder="Search subjects..."
+              />
+            </FilterSection>
+
+            {/* College Filter */}
+            <FilterSection
+              title="College"
+              expanded={expandedFilters.has("college")}
+              onToggle={() => toggleFilter("college")}
+            >
+              <CheckboxGroup
+                options={colleges}
+                selected={filters.college || []}
+                onChange={(values) => handleFilterChange("college", values)}
+                maxHeight="max-h-48"
+              />
+            </FilterSection>
+
+            {/* Breadth Requirements */}
+            <FilterSection
+              title="Breadth"
+              expanded={expandedFilters.has("breadth")}
+              onToggle={() => toggleFilter("breadth")}
+            >
+              <CheckboxGroup
+                options={breadthRequirements}
+                selected={filters.breadth || []}
+                onChange={(values) => handleFilterChange("breadth", values)}
+                maxHeight="max-h-48"
+              />
+            </FilterSection>
+
+            {/* General Education */}
+            <FilterSection
+              title="General Education"
+              expanded={expandedFilters.has("genEd")}
+              onToggle={() => toggleFilter("genEd")}
+            >
+              <CheckboxGroup
+                options={genEdRequirements}
+                selected={filters.generalEducation || []}
+                onChange={(values) =>
+                  handleFilterChange("generalEducation", values)
+                }
+                maxHeight="max-h-48"
+              />
+            </FilterSection>
+
+            {/* Level Filter */}
+            <FilterSection
+              title="Level"
+              expanded={expandedFilters.has("level")}
+              onToggle={() => toggleFilter("level")}
+            >
+              <CheckboxGroup
+                options={levels}
+                selected={filters.level || []}
+                onChange={(values) => handleFilterChange("level", values)}
+              />
+            </FilterSection>
+
+            {/* Credits Filter */}
+            <FilterSection
+              title="Credits"
+              expanded={expandedFilters.has("credits")}
+              onToggle={() => toggleFilter("credits")}
+            >
+              <CheckboxGroup
+                options={availableCredits}
+                selected={filters.credits || []}
+                onChange={(values) => handleFilterChange("credits", values)}
+                maxHeight="max-h-48"
+              />
+            </FilterSection>
+
+            {/* Course Audience */}
+            <FilterSection
+              title="Course Audience"
+              expanded={expandedFilters.has("audience")}
+              onToggle={() => toggleFilter("audience")}
+            >
+              <CheckboxGroup
+                options={audiences}
+                selected={filters.cloAudience || []}
+                onChange={(values) => handleFilterChange("cloAudience", values)}
+              />
+            </FilterSection>
+
+            {/* Other Filters */}
+            <FilterSection
+              title="Other Options"
+              expanded={expandedFilters.has("other")}
+              onToggle={() => toggleFilter("other")}
+            >
+              <div className="space-y-3">
+                <label className="flex items-center gap-2 text-sm cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={filters.crosslisted === true}
+                    onChange={(e) =>
+                      handleFilterChange(
+                        "crosslisted",
+                        e.target.checked ? true : null
+                      )
+                    }
+                    className="rounded border-gray-300 text-red-600 focus:ring-red-500"
+                  />
+                  <span>Crosslisted Only</span>
+                </label>
+                <label className="flex items-center gap-2 text-sm cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={filters.repeatable === true}
+                    onChange={(e) =>
+                      handleFilterChange(
+                        "repeatable",
+                        e.target.checked ? true : null
+                      )
+                    }
+                    className="rounded border-gray-300 text-red-600 focus:ring-red-500"
+                  />
+                  <span>Repeatable Courses</span>
+                </label>
+              </div>
+            </FilterSection>
           </div>
         </div>
 
-        {/* Main */}
+        {/* Main Content */}
         <div className="flex-1 flex flex-col">
           {/* Header */}
           <div className="bg-white border-b border-gray-200 px-8 py-4">
@@ -401,128 +600,124 @@ const CourseSearchAIContent = () => {
                   </motion.span>
                 )}
               </div>
-              <button className="text-sm text-gray-600 hover:text-gray-800">
-                sign out
-              </button>
+              <div className="flex items-center gap-4">
+                <button
+                  onClick={() => setAiMode(!aiMode)}
+                  className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+                    aiMode
+                      ? "bg-red-600 text-white"
+                      : "bg-gray-100 text-gray-700"
+                  }`}
+                >
+                  {aiMode ? "AI Mode On" : "AI Mode Off"}
+                </button>
+              </div>
             </div>
           </div>
 
-          {/* Search */}
-          <div className="bg-white px-8 py-6 border-b border-gray-200">
-            <div className="space-y-4">
-              <div className="relative">
-                <input
-                  type="text"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="What are you interested in?"
-                  className="w-full px-4 py-3 pl-12 bg-gray-50 rounded-lg placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-                <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-500" />
-              </div>
+          {/* Results Summary */}
+          <div className="bg-gray-50 px-8 py-3 border-b border-gray-200">
+            <p className="text-sm text-gray-600">
+              {loading ? (
+                "Loading courses..."
+              ) : error ? (
+                <span className="text-red-600">Error loading courses</span>
+              ) : (
+                <>
+                  {`Showing ${courses.length} of ${Number(totalCount)} courses`}
+                  {!!(
+                    filters.searchQuery ||
+                    filters.catalogNumber ||
+                    filters.college?.length ||
+                    filters.level?.length ||
+                    filters.credits?.length ||
+                    filters.breadth?.length ||
+                    filters.generalEducation?.length
+                  ) && " (filtered)"}
+                </>
+              )}
+            </p>
+          </div>
 
-              <div className="flex gap-4">
-                <select className="px-4 py-2 bg-gray-50 rounded-full text-sm">
-                  <option>Term: Fall 2022</option>
-                  <option>Term: Spring 2023</option>
-                  <option>Term: Fall 2023</option>
-                </select>
-                <select className="px-4 py-2 bg-gray-50 rounded-full text-sm">
-                  <option>Subjects: All</option>
-                  <option>Computer Sciences</option>
-                  <option>Mathematics</option>
-                  <option>Statistics</option>
-                </select>
-                <input
-                  type="text"
-                  placeholder="Keyword"
-                  className="px-4 py-2 bg-gray-50 rounded-full text-sm flex-1 placeholder-gray-600"
-                />
-              </div>
-
-              <div className="flex items-center gap-2">
-                <span className="text-sm text-gray-600">Popular topics:</span>
-                {popularTopics.map((topic) => (
+          {/* Content Area */}
+          <div className="flex-1 flex overflow-hidden">
+            {/* Course List */}
+            <div className="w-3/10 p-6 overflow-y-auto border-r border-gray-200">
+              {error ? (
+                <div className="flex flex-col items-center justify-center py-12">
+                  <AlertCircle className="w-12 h-12 text-red-500 mb-4" />
+                  <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                    Error Loading Courses
+                  </h3>
+                  <p className="text-gray-600 mb-4">{error.message}</p>
                   <button
-                    key={topic}
-                    onClick={() => setSearchQuery(topic)}
-                    className="px-3 py-1 bg-gray-500 hover:bg-gray-800 rounded-full text-sm transition-colors text-white"
+                    onClick={refetch}
+                    className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
                   >
-                    {topic}
-                  </button>
-                ))}
-              </div>
-
-              <div className="flex items-center justify-between">
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => setAiMode(!aiMode)}
-                    className={`px-4 py-2 rounded-lg font-medium transition-colors ${
-                      aiMode
-                        ? "bg-red-600 text-white"
-                        : "bg-gray-100 text-gray-700"
-                    }`}
-                  >
-                    {aiMode ? "AI Mode On" : "AI Mode Off"}
-                  </button>
-                  <button
-                    onClick={() => setGroupByTopic(!groupByTopic)}
-                    className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg font-medium"
-                  >
-                    Group by topic
+                    Try Again
                   </button>
                 </div>
-                {selectedCourses.size > 0 && (
+              ) : loading && currentPage === 0 ? (
+                <div className="flex items-center justify-center py-12">
+                  <LoadingSpinner size="lg" color="blue" />
+                  <span className="ml-2 text-gray-600">Loading courses...</span>
+                </div>
+              ) : courses.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-12">
+                  <BookOpen className="w-12 h-12 text-gray-400 mb-4" />
+                  <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                    No courses found
+                  </h3>
+                  <p className="text-gray-600 text-center mb-4">
+                    Try adjusting your filters or search terms
+                  </p>
                   <button
-                    onClick={() => setShowComparison(true)}
-                    className="px-4 py-2 bg-blue-600 text-white rounded-lg font-medium"
+                    onClick={clearAllFilters}
+                    className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
                   >
-                    Compare ({selectedCourses.size})
+                    Clear Filters
                   </button>
-                )}
-              </div>
-            </div>
-          </div>
+                </div>
+              ) : (
+                <>
+                  <div className="space-y-3">
+                    {courses.map((course) => (
+                      <CourseCard
+                        key={course.course_id}
+                        course={course}
+                        selected={
+                          selectedCourse?.course_id === course.course_id
+                        }
+                        onSelect={() => handleCourseSelect(course)}
+                      />
+                    ))}
+                  </div>
 
-          {/* Content */}
-          <div className="flex-1 flex overflow-hidden">
-            {/* List */}
-            <div className="w-1/2 p-6 overflow-y-auto border-r border-gray-200">
-              <p className="text-sm text-gray-900 mb-4 font-medium">
-                {aiMode
-                  ? "AI recommendations based on your profile"
-                  : "Based on your search results"}
-              </p>
-
-              <div className="space-y-3">
-                {error ? (
-                  <ErrorDisplay error={error} onRetry={refetch} />
-                ) : loading ? (
-                  <LoadingState />
-                ) : (
-                  courses.map((course) => (
-                    <CourseCard
-                      key={course.course_id}
-                      course={course}
-                      selected={
-                        selectedCourse?.course_id === course.course_id ||
-                        selectedCourses.has(course.course_id)
-                      }
-                      onSelect={() => handleCourseSelect(course)}
-                      showRelevance={aiMode}
-                    />
-                  ))
-                )}
-              </div>
-
-              <button className="mt-6 text-blue-700 font-medium flex items-center gap-2 hover:text-blue-800">
-                View more
-                <ChevronRight className="w-4 h-4" />
-              </button>
+                  {courses.length < totalCount && (
+                    <button
+                      onClick={loadMore}
+                      disabled={loading}
+                      className="mt-6 w-full py-3 text-red-700 font-medium flex items-center justify-center gap-2 hover:text-red-100 disabled:opacity-50"
+                    >
+                      {loading ? (
+                        <>
+                          <LoadingSpinner size="sm" />
+                          Loading more...
+                        </>
+                      ) : (
+                        <>
+                          Load more courses
+                          <ChevronDown className="w-4 h-4" />
+                        </>
+                      )}
+                    </button>
+                  )}
+                </>
+              )}
             </div>
 
-            {/* Details */}
-            <div className="w-1/2 p-6 overflow-y-auto bg-gray-50">
+            {/* Course Details */}
+            <div className="w-7/10 p-6 overflow-y-auto bg-gray-50">
               {selectedCourse ? (
                 <motion.div
                   initial={{ opacity: 0, x: 20 }}
@@ -530,104 +725,221 @@ const CourseSearchAIContent = () => {
                   className="space-y-6"
                 >
                   <div>
-                    <h2 className="text-3xl font-bold text-black mb-2">
-                      {selectedCourse.course_code}{" "}
-                      {selectedCourse.catalog_number}:{selectedCourse.title}
+                    <h2 className="text-2xl font-bold text-black mb-2">
+                      {selectedCourse.course_code}: {selectedCourse.title}
                     </h2>
-                    <p className="text-black">{selectedCourse.description}</p>
                   </div>
 
                   {aiMode && (
-                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                      <h3 className="font-semibold text-blue-900 mb-2 flex items-center gap-2">
+                    <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+                      <h3 className="font-semibold text-red-900 mb-2 flex items-center gap-2">
                         <Sparkles className="w-5 h-5" />
-                        Why we recommended this
+                        AI Analysis
                       </h3>
-                      <p className="text-blue-800 text-sm">
-                        Based on your completed courses in algorithms and data
-                        structures, plus your interest in AI, this course aligns
-                        with your goals.
+                      <p className="text-red-800 text-sm">
+                        AI-powered recommendations and insights will be
+                        available soon.
                       </p>
                     </div>
                   )}
 
-                  <div className="bg-white rounded-lg p-6 shadow-sm">
-                    <h3 className="font-semibold text-black mb-4">
-                      Course Details
-                    </h3>
-                    <dl className="space-y-3">
-                      <div className="flex justify-between">
-                        <dt className="text-gray-800">Credits</dt>
-                        <dd className="font-medium text-gray-900">
-                          {selectedCourse.credits}
-                        </dd>
-                      </div>
-                      <div className="flex justify-between">
-                        <dt className="text-gray-800">Level</dt>
-                        <dd className="font-medium text-gray-900">
-                          {selectedCourse.level}
-                        </dd>
-                      </div>
-                      <div className="flex justify-between">
-                        <dt className="text-gray-800">Last Taught</dt>
-                        <dd className="font-medium text-gray-900">
-                          {selectedCourse.last_taught_term}
-                        </dd>
-                      </div>
-                      <div className="flex justify-between">
-                        <dt className="text-gray-800">College</dt>
-                        <dd className="font-medium text-gray-900">
-                          {selectedCourse.college}
-                        </dd>
-                      </div>
-                    </dl>
-                  </div>
-
-                  {selectedCourse.pre_requisites && (
-                    <div className="bg-white rounded-lg p-6 shadow-sm">
-                      <h3 className="font-semibold text-black mb-3">
+                  <Tabs defaultValue="description" className="w-full">
+                    <TabsList className="grid w-full grid-cols-3">
+                      <TabsTrigger value="description">
+                        Course Description
+                      </TabsTrigger>
+                      <TabsTrigger value="prerequisites">
                         Prerequisites
-                      </h3>
-                      <p className="text-black">
-                        {selectedCourse.pre_requisites}
-                      </p>
-                    </div>
-                  )}
+                      </TabsTrigger>
+                      <TabsTrigger value="sections">
+                        Available Sections
+                      </TabsTrigger>
+                    </TabsList>
 
-                  <div className="bg-white rounded-lg p-6 shadow-sm">
-                    <h3 className="font-semibold text-black mb-4">
-                      Grade Distribution
-                    </h3>
-                    <GradeDistributionChart
-                      courseId={selectedCourse.course_id}
-                    />
-                  </div>
+                    <TabsContent value="description" className="space-y-6">
+                      <div className="bg-white rounded-lg p-6 shadow-sm">
+                        <h3 className="font-semibold text-black mb-4">
+                          Description
+                        </h3>
+                        <p className="text-gray-700 leading-relaxed">
+                          {selectedCourse.description}
+                        </p>
+                      </div>
 
-                  <div className="bg-white rounded-lg p-6 shadow-sm">
-                    <h3 className="font-semibold text-black mb-3 flex items-center gap-2">
-                      Rate My Professor
-                      <span className="px-2 py-1 bg-gray-100 text-gray-600 rounded text-xs">
-                        Coming Soon
-                      </span>
-                    </h3>
-                    <p className="text-black text-sm">
-                      Professor ratings and reviews will be available soon.
-                    </p>
-                  </div>
+                      <div className="bg-white rounded-lg p-6 shadow-sm">
+                        <h3 className="font-semibold text-black mb-4">
+                          Course Details
+                        </h3>
+                        <dl className="space-y-3">
+                          <div className="flex justify-between">
+                            <dt className="text-gray-600">Credits</dt>
+                            <dd className="font-medium text-gray-900">
+                              {selectedCourse.credits}
+                            </dd>
+                          </div>
+                          <div className="flex justify-between">
+                            <dt className="text-gray-600">Level</dt>
+                            <dd className="font-medium text-gray-900">
+                              {selectedCourse.level}
+                            </dd>
+                          </div>
+                          <div className="flex justify-between">
+                            <dt className="text-gray-600">College</dt>
+                            <dd className="font-medium text-gray-900">
+                              {selectedCourse.college}
+                            </dd>
+                          </div>
+                          <div className="flex justify-between">
+                            <dt className="text-gray-600">Last Taught</dt>
+                            <dd className="font-medium text-gray-900">
+                              {selectedCourse.last_taught_term}
+                            </dd>
+                          </div>
+                          <div className="flex justify-between">
+                            <dt className="text-gray-600">Course Audience</dt>
+                            <dd className="font-medium text-gray-900">
+                              {selectedCourse.clo_audience || "Not specified"}
+                            </dd>
+                          </div>
+                          <div className="flex justify-between">
+                            <dt className="text-gray-600">Crosslisted</dt>
+                            <dd className="font-medium text-gray-900">
+                              {selectedCourse.crosslisted ? "Yes" : "No"}
+                            </dd>
+                          </div>
+                          <div className="flex justify-between">
+                            <dt className="text-gray-600">Repeatable</dt>
+                            <dd className="font-medium text-gray-900">
+                              {selectedCourse.repeatable ? "Yes" : "No"}
+                            </dd>
+                          </div>
+                        </dl>
+                      </div>
 
-                  <button
-                    disabled
-                    className="w-full py-3 bg-gray-100 text-gray-600 rounded-lg font-medium cursor-not-allowed flex items-center justify-center gap-2"
-                  >
-                    <AlertCircle className="w-5 h-5" />
-                    Check Eligibility (DARS integration coming soon)
-                  </button>
+                      {((selectedCourse.course_requirements?.breadth_or
+                        ?.length || 0) > 0 ||
+                        (selectedCourse.course_requirements?.gened_and
+                          ?.length || 0) > 0) && (
+                        <div className="bg-white rounded-lg p-6 shadow-sm">
+                          <h3 className="font-semibold text-black mb-3">
+                            Requirements Fulfilled
+                          </h3>
+                          <div className="space-y-2">
+                            {(selectedCourse.course_requirements?.breadth_or
+                              ?.length || 0) > 0 && (
+                              <div>
+                                <span className="text-sm text-gray-600">
+                                  Breadth:
+                                </span>
+                                <div className="flex flex-wrap gap-2 mt-1">
+                                  {selectedCourse.course_requirements?.breadth_or?.map(
+                                    (req, i) => (
+                                      <span
+                                        key={i}
+                                        className="px-2 py-1 bg-red-100 text-red-700 rounded text-sm"
+                                      >
+                                        {req}
+                                      </span>
+                                    )
+                                  )}
+                                </div>
+                              </div>
+                            )}
+                            {(selectedCourse.course_requirements?.gened_and
+                              ?.length || 0) > 0 && (
+                              <div>
+                                <span className="text-sm text-gray-600">
+                                  General Education:
+                                </span>
+                                <div className="flex flex-wrap gap-2 mt-1">
+                                  {selectedCourse.course_requirements?.gened_and?.map(
+                                    (req, i) => (
+                                      <span
+                                        key={i}
+                                        className="px-2 py-1 bg-red-100 text-red-700 rounded text-sm"
+                                      >
+                                        {req}
+                                      </span>
+                                    )
+                                  )}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )}
+
+                      {selectedCourse.learning_outcomes &&
+                        selectedCourse.learning_outcomes !== "NaN" && (
+                          <div className="bg-white rounded-lg p-6 shadow-sm">
+                            <h3 className="font-semibold text-black mb-3">
+                              Learning Outcomes
+                            </h3>
+                            <p className="text-gray-700 whitespace-pre-line">
+                              {selectedCourse.learning_outcomes}
+                            </p>
+                          </div>
+                        )}
+                    </TabsContent>
+
+                    <TabsContent value="prerequisites" className="space-y-6">
+                      {/* Interactive Prerequisite Journey */}
+                      <div className="bg-white rounded-lg p-6 shadow-sm">
+                        <h3 className="font-semibold text-black mb-4 flex items-center gap-2">
+                          <BookOpen className="w-5 h-5" />
+                          Prerequisite Journey
+                        </h3>
+                        <PrerequisiteJourneyWrapper
+                          courseId={selectedCourse.course_id}
+                          onCourseClick={(courseId: number) => {
+                            // Optionally navigate to that course or show details
+                            console.log("Clicked course:", courseId);
+                          }}
+                        />
+                      </div>
+
+                      {/* Enhanced Prerequisites Display */}
+                      <PrerequisiteDisplay
+                        courseId={selectedCourse.course_id}
+                        className="mb-6"
+                      />
+
+                      {selectedCourse.pre_requisites && (
+                        <div className="bg-white rounded-lg p-6 shadow-sm">
+                          <h3 className="font-semibold text-black mb-3">
+                            Prerequisite Description
+                          </h3>
+                          <p className="text-gray-700">
+                            {selectedCourse.pre_requisites}
+                          </p>
+                        </div>
+                      )}
+                    </TabsContent>
+
+                    <TabsContent value="sections" className="space-y-6">
+                      <div className="bg-white rounded-lg p-6 shadow-sm">
+                        <h3 className="font-semibold text-black mb-4">
+                          Available Sections
+                        </h3>
+                        <div className="text-center py-8">
+                          <BookOpen className="w-12 h-12 mx-auto mb-3 text-gray-400" />
+                          <p className="text-gray-600">
+                            Section information will be available soon.
+                          </p>
+                          <p className="text-sm text-gray-500 mt-2">
+                            This will show available class sections, times,
+                            instructors, and enrollment information.
+                          </p>
+                        </div>
+                      </div>
+                    </TabsContent>
+                  </Tabs>
                 </motion.div>
               ) : (
                 <div className="flex items-center justify-center h-full text-gray-600">
                   <div className="text-center">
                     <BookOpen className="w-12 h-12 mx-auto mb-3" />
-                    <p className="text-black">
+                    <p className="text-gray-700">
                       Select a course to view details
                     </p>
                   </div>
@@ -639,8 +951,4 @@ const CourseSearchAIContent = () => {
       </div>
     </div>
   );
-};
-
-export function CourseSearchAI() {
-  return <CourseSearchAIContent />;
 }

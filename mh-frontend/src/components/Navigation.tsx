@@ -37,7 +37,7 @@ const Navigation = () => {
     },
     {
       name: "RA Finder",
-      href: "/ra-finder",
+      href: "/ra-feature",
       icon: <FlaskConical className="w-4 h-4" />,
     },
 
