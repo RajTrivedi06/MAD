@@ -1,7 +1,7 @@
 // pages/DocumentsPage.tsx
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import DocumentUpload from "@/components/DocumentUpload";
 import { useBackendAPI, DarsData, CVData } from "@/hooks/useBackendAPI";
@@ -219,28 +219,31 @@ const DocumentsPage: React.FC = () => {
   const [showUpload, setShowUpload] = useState(false);
   const [uploadSuccess, setUploadSuccess] = useState<string | null>(null);
 
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     if (!user) return;
 
     try {
-      const [dars, cv, health] = await Promise.all([
+      setBackendStatus(true);
+      const [darsResult, cvResult] = await Promise.all([
         getUserDarsData(),
         getUserCVData(),
-        checkBackendHealth(),
       ]);
 
-      setDarsData(dars);
-      setCvData(cv);
-      setBackendStatus(health);
+      if (darsResult) {
+        setDarsData(darsResult);
+      }
+      if (cvResult) {
+        setCvData(cvResult);
+      }
     } catch (error) {
       console.error("Error loading data:", error);
       setBackendStatus(false);
     }
-  };
+  }, [user]);
 
   useEffect(() => {
     loadData();
-  }, [user]);
+  }, [loadData]);
 
   const handleUploadComplete = (
     type: "dars" | "cv",

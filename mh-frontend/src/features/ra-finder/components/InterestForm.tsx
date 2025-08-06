@@ -3,48 +3,50 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
 interface InterestFormProps {
-  keywords: string;
-  onKeywordsChange: (value: string) => void;
+  interests: string;
+  onInterestsChange: (value: string) => void;
   onSearch: (useProfile: boolean) => void;
   loading: boolean;
+  className?: string;
 }
 
 export function InterestForm({
-  keywords,
-  onKeywordsChange,
+  interests,
+  onInterestsChange,
   onSearch,
   loading,
+  className,
 }: InterestFormProps) {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (keywords.trim()) onSearch(false);
+    if (interests.trim()) onSearch(true); // Use AI search instead of mock data
   };
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-6">
+    <form onSubmit={handleSubmit} className={`space-y-6 ${className || ""}`}>
       <div>
         <label
-          htmlFor="keywords"
+          htmlFor="interests"
           className="block text-sm font-medium text-gray-700 mb-2"
         >
           Research Interests
         </label>
         <div className="flex gap-3">
           <Input
-            id="keywords"
+            id="interests"
             placeholder="Enter research interests (e.g., machine learning, genomics, climate change)"
-            value={keywords}
-            onChange={(e) => onKeywordsChange(e.target.value)}
+            value={interests}
+            onChange={(e) => onInterestsChange(e.target.value)}
             disabled={loading}
             className="flex-1 h-12 text-base"
           />
           <Button
             type="submit"
-            disabled={loading || !keywords.trim()}
+            disabled={loading || !interests.trim()}
             className="h-12 px-6 bg-red-600 hover:bg-red-700 text-white font-medium"
           >
             <Search className="w-5 h-5 mr-2" />
-            Search Labs
+            AI-Powered Search
           </Button>
         </div>
         <p className="mt-2 text-sm text-gray-600 flex items-start gap-1">
@@ -61,7 +63,7 @@ export function InterestForm({
         </div>
         <div className="relative flex justify-center text-sm">
           <span className="px-4 bg-white text-gray-500">
-            or use AI recommendations
+            or get comprehensive profile analysis
           </span>
         </div>
       </div>
@@ -78,7 +80,8 @@ export function InterestForm({
           Get AI Recommendations from My Profile
         </Button>
         <p className="mt-2 text-sm text-gray-600">
-          Uses your CV and academic history for personalized matches
+          Deep analysis of your CV, DARS, and profile for highly personalized
+          matches
         </p>
       </div>
     </form>

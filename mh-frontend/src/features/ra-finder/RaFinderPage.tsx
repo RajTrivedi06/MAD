@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { motion } from "framer-motion";
 import { InterestForm } from "./components/InterestForm";
 import { LabMatchCard } from "./components/LabMatchCard";
@@ -6,18 +6,41 @@ import { SkeletonCard } from "./components/SkeletonCard";
 import { FilterBar } from "./components/FilterBar";
 import { ProgressDashboard } from "./components/ProgressDashboard";
 import { QuickActions } from "./components/QuickActions";
-import { mockMatches } from "./data/mockMatches";
+// Removed mock data import - no longer needed
 import { LabMatch, FilterOptions } from "./types/labMatch";
 import { useSavedLabs } from "./hooks/useSavedLabs";
 import { useApplicationTracker } from "./hooks/useApplicationTracker";
+import { useDeepResearch } from "./hooks/useDeepResearch";
+import { useLabValidation } from "./hooks/useLabValidation";
+import { ClarificationModal } from "./components/ClarificationModal";
+import { ProgressToast } from "./components/ProgressToast";
+import { FallbackWarningBanner } from "./components/FallbackWarningBanner";
+import { ValidationStatus } from "./components/ValidationStatus";
+import { DataAuthenticityWarning } from "./components/DataAuthenticityWarning";
 import { Microscope, Brain, Users } from "lucide-react";
 
 export function RaFinderPage() {
-  const [keywords, setKeywords] = useState("");
+  const [interests, setInterests] = useState("");
   const [matches, setMatches] = useState<LabMatch[]>([]);
   const [loading, setLoading] = useState(false);
   const [hasSearched, setHasSearched] = useState(false);
   const [filters, setFilters] = useState<FilterOptions>({});
+  const [showClarificationModal, setShowClarificationModal] = useState(false);
+  const [progressMessage, setProgressMessage] = useState("");
+  const [toastType, setToastType] = useState<"loading" | "success" | "error">(
+    "loading"
+  );
+
+  // Add debug effect to monitor matches state
+  useEffect(() => {
+    console.log("[RaFinderPage] Matches state updated:", {
+      matchCount: matches.length,
+      matches: matches,
+      firstMatch: matches[0],
+      loading,
+      hasSearched,
+    });
+  }, [matches, loading, hasSearched]);
 
   // Custom hooks for saved labs and application tracking
   const { savedCount, toggleSavedLab, isLabSaved } = useSavedLabs();
@@ -32,15 +55,92 @@ export function RaFinderPage() {
     getResponseCount,
   } = useApplicationTracker();
 
+  // Initialize the deep research hook
+  const {
+    searchWithAI,
+    loading: aiLoading,
+    error: aiError,
+    clarifyingQuestions,
+    modelUsed,
+    isAdvancedModelUnavailable,
+    fallbackReason,
+    validationSummary,
+    hasUnverifiedData,
+    resetSearch,
+  } = useDeepResearch({
+    onProgress: (message) => {
+      setProgressMessage(message);
+      // Determine toast type based on message content
+      if (message.includes("Error")) {
+        setToastType("error");
+      } else if (message.includes("Found")) {
+        setToastType("success");
+      } else {
+        setToastType("loading");
+      }
+    },
+  });
+
+  // Initialize lab validation hook
+  const { validateAndFilterLabs, getValidationSummary, isDataAuthentic } =
+    useLabValidation();
+
   const handleSearch = async (useProfile: boolean) => {
-    setLoading(true);
-    setHasSearched(true);
-    // Simulate API call
-    console.log("Searching with profile:", useProfile);
-    setTimeout(() => {
-      setMatches(mockMatches);
-      setLoading(false);
-    }, 1500);
+    console.log("[RaFinderPage] handleSearch called with:", {
+      useProfile,
+      interests,
+    });
+
+    if (useProfile) {
+      // Use AI-powered search
+      setHasSearched(true);
+      console.log("[RaFinderPage] Starting AI search...");
+
+      const result = await searchWithAI(interests);
+      console.log("[RaFinderPage] Search result:", result);
+
+      if (result?.needsClarification) {
+        console.log("[RaFinderPage] Showing clarification modal");
+        setShowClarificationModal(true);
+      } else if (result?.labs) {
+        console.log(
+          "[RaFinderPage] Setting matches with",
+          result.labs.length,
+          "labs"
+        );
+        setMatches(result.labs);
+
+        // Log the actual labs received
+        console.log("[RaFinderPage] First lab example:", result.labs[0]);
+
+        // Clear progress message after a delay
+        setTimeout(() => setProgressMessage(""), 3000);
+      } else if (aiError) {
+        console.error("[RaFinderPage] AI Error:", aiError);
+        // Show error toast
+        setProgressMessage(aiError);
+        setToastType("error");
+        setTimeout(() => setProgressMessage(""), 5000);
+      } else {
+        console.warn("[RaFinderPage] No result returned from searchWithAI");
+      }
+    } else {
+      // This shouldn't happen based on your code
+      console.warn(
+        "[RaFinderPage] Non-profile search called - this should not happen"
+      );
+    }
+  };
+
+  // Add handler for clarification modal
+  const handleClarificationSubmit = async (answers: Record<string, string>) => {
+    setShowClarificationModal(false);
+    const result = await searchWithAI(interests, answers);
+
+    if (result?.labs) {
+      setMatches(result.labs);
+      setTimeout(() => setProgressMessage(""), 3000);
+    }
   };
 
   // Get unique departments for filter
@@ -51,6 +151,11 @@ export function RaFinderPage() {
 
   // Filter and sort matches based on current filters
   const filteredMatches = useMemo(() => {
+    console.log("[RaFinderPage] Filtering matches:", {
+      inputCount: matches.length,
+      filters: filters,
+    });
+
     let filtered = [...matches];
 
     // Apply department filter
@@ -58,6 +163,7 @@ export function RaFinderPage() {
       filtered = filtered.filter(
         (match) => match.department === filters.department
       );
+      console.log("[RaFinderPage] After department filter:", filtered.length);
     }
 
     // Apply minimum score filter
@@ -65,11 +171,13 @@ export function RaFinderPage() {
       filtered = filtered.filter(
         (match) => match.fitScore >= (filters.minScore || 0)
       );
+      console.log("[RaFinderPage] After score filter:", filtered.length);
     }
 
     // Apply openings only filter
     if (filters.openingsOnly) {
       filtered = filtered.filter((match) => match.openings === true);
+      console.log("[RaFinderPage] After openings filter:", filtered.length);
     }
 
     // Apply sorting
@@ -88,6 +196,11 @@ export function RaFinderPage() {
         filtered = filtered.sort((a, b) => b.fitScore - a.fitScore);
         break;
     }
+
+    console.log("[RaFinderPage] Final filtered matches:", {
+      outputCount: filtered.length,
+      filtered: filtered,
+    });
 
     return filtered;
   }, [matches, filters]);
@@ -136,12 +249,33 @@ export function RaFinderPage() {
         {/* Search Section */}
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
           <InterestForm
-            keywords={keywords}
-            onKeywordsChange={setKeywords}
+            interests={interests}
+            onInterestsChange={setInterests}
             onSearch={handleSearch}
-            loading={loading}
+            loading={loading || aiLoading}
+            className="mb-12"
           />
         </div>
+
+        {/* Fallback Warning Banner */}
+        <FallbackWarningBanner
+          isVisible={
+            hasSearched &&
+            !loading &&
+            (modelUsed === "gpt-4o" ||
+              modelUsed === "none" ||
+              modelUsed === "fallback-mock")
+          }
+          fallbackReason={fallbackReason}
+          modelUsed={modelUsed}
+        />
+
+        {/* Data Authenticity Warning */}
+        <DataAuthenticityWarning
+          labCount={matches.length}
+          hasUnverifiedData={hasUnverifiedData}
+          validationRate={validationSummary?.validationRate}
+        />
 
         {/* Progress Dashboard */}
         {hasSearched && (
@@ -168,15 +302,45 @@ export function RaFinderPage() {
               )}
 
               <div className="flex items-center justify-between mb-6">
-                <h2 className="text-xl font-semibold text-gray-900">
-                  {loading ? "Finding matches..." : `Research Opportunities`}
-                </h2>
+                <div className="flex items-center gap-3">
+                  <h2 className="text-xl font-semibold text-gray-900">
+                    {loading ? "Finding matches..." : `Research Opportunities`}
+                  </h2>
+                  {modelUsed && !loading && filteredMatches.length > 0 && (
+                    <div className="flex items-center gap-2">
+                      <span
+                        className={`px-2 py-1 rounded-full text-xs font-medium ${
+                          modelUsed === "o4-mini-deep-research"
+                            ? "bg-green-100 text-green-800 border border-green-200"
+                            : modelUsed === "gpt-4o"
+                            ? isAdvancedModelUnavailable
+                              ? "bg-amber-100 text-amber-800 border border-amber-200"
+                              : "bg-blue-100 text-blue-800 border border-blue-200"
+                            : "bg-gray-100 text-gray-800 border border-gray-200"
+                        }`}
+                      >
+                        {modelUsed === "o4-mini-deep-research"
+                          ? "🚀 Advanced AI"
+                          : modelUsed === "gpt-4o"
+                          ? isAdvancedModelUnavailable
+                            ? "⚠️ Fallback AI"
+                            : "🧠 Standard AI"
+                          : "📊 Sample Data"}
+                      </span>
+                    </div>
+                  )}
+                </div>
                 {!loading && filteredMatches.length > 0 && (
                   <span className="text-sm text-gray-600">
                     Showing {filteredMatches.length} of {matches.length} matches
                   </span>
                 )}
               </div>
+
+              {/* Validation Status */}
+              {!loading && filteredMatches.length > 0 && (
+                <ValidationStatus labs={filteredMatches} />
+              )}
 
               <div className="space-y-4">
                 {loading ? (
@@ -257,6 +421,25 @@ export function RaFinderPage() {
             } matches, ${savedCount} saved, ${getAppliedCount()} applied`
           );
         }}
+      />
+
+      {/* Clarification Modal */}
+      <ClarificationModal
+        isOpen={showClarificationModal}
+        onClose={() => {
+          setShowClarificationModal(false);
+          resetSearch();
+        }}
+        questions={clarifyingQuestions}
+        onSubmit={handleClarificationSubmit}
+        loading={aiLoading}
+      />
+
+      {/* Progress Toast */}
+      <ProgressToast
+        message={progressMessage}
+        isVisible={!!progressMessage}
+        type={toastType}
       />
     </div>
   );

@@ -18,6 +18,7 @@ import { LabMatch, ApplicationStatus } from "../types/labMatch";
 import { EmailTemplateModal } from "./EmailTemplateModal";
 import { LearningResourcesPanel } from "./LearningResourcesPanel";
 import { ApplicationTracker } from "./ApplicationTracker";
+import { CitationsSection } from "./CitationsSection";
 
 interface LabMatchCardProps {
   match: LabMatch;
@@ -255,6 +256,9 @@ export function LabMatchCard({
                   />
                 </div>
               )}
+
+              {/* Citations Section */}
+              <CitationsSection citations={match.citations} className="mt-6" />
             </div>
           </CardContent>
         )}

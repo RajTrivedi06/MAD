@@ -1,3 +1,10 @@
+export interface Citation {
+  source: string;
+  url: string;
+  accessed: string;
+  info_used: string;
+}
+
 export interface LabMatch {
   id: string;
   labTitle: string;
@@ -14,6 +21,7 @@ export interface LabMatch {
   learningResources?: LearningResource[];
   approachTips?: string[];
   relatedResearch?: RelatedResearch[];
+  citations?: Citation[];
   emailTemplateData?: EmailTemplateData;
 }
 

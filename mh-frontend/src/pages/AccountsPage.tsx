@@ -30,7 +30,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { useRouter } from "next/navigation";
+import { useRouter } from "@tanstack/react-router";
 import { useDocumentUpload } from "@/hooks/useDocumentUpload";
 
 interface ProfileData {
@@ -71,79 +71,92 @@ export function AccountsPage() {
   const loadProfile = useCallback(async () => {
     if (!user) return;
 
-    try {
-      setLoading(true);
-      const { profile: profileData, error: profileError } = await getProfile(
-        user.id
-      );
+    console.log("🔍 Loading profile for user:", user.id);
 
-      if (profileError && profileError.code !== "PGRST116") {
-        // PGRST116 is "Row not found" - we'll handle this case
-        console.error("Error loading profile:", profileError);
-        setError("Failed to load profile");
+    try {
+      const { profile: userProfile, error } = await getProfile(user.id);
+
+      console.log("📊 Profile fetch result:", { userProfile, error });
+
+      if (error) {
+        console.error("❌ Error loading profile:", error);
+
+        // If profile doesn't exist, try to create it
+        if (error.code === "PGRST116") {
+          // No rows returned
+          console.log("🔄 Profile not found, creating...");
+          const { profile: newProfile, error: createError } =
+            await createProfile(
+              user.id,
+              user.email!,
+              user.user_metadata?.first_name,
+              user.user_metadata?.last_name
+            );
+
+          if (createError) {
+            console.error("❌ Error creating profile:", createError);
+            setError("Failed to create profile");
+          } else {
+            console.log("✅ Profile created successfully:", newProfile);
+            setProfile(newProfile);
+            if (newProfile) {
+              setEditedProfile({
+                first_name: newProfile.first_name || "",
+                last_name: newProfile.last_name || "",
+                email: newProfile.email || "",
+                full_name: newProfile.full_name || "",
+              });
+            }
+          }
+        } else {
+          setError("Failed to load profile");
+        }
         return;
       }
 
-      if (!profileData) {
-        // Profile doesn't exist, create it from user metadata
-        console.log("No profile found, creating from user metadata:", {
-          user_metadata: user.user_metadata,
-          email: user.email,
-          id: user.id,
-        });
-        const { profile: newProfile, error: createError } = await createProfile(
-          user.id,
-          user.email || "",
-          user.user_metadata?.first_name,
-          user.user_metadata?.last_name
-        );
+      console.log("✅ Profile loaded successfully:", userProfile);
+      setProfile(userProfile);
 
-        if (createError) {
-          console.error("Error creating profile:", createError);
-          setError("Failed to create profile");
-          return;
-        }
-
-        setProfile(newProfile);
-        if (newProfile) {
-          setEditedProfile({
-            first_name: newProfile.first_name || "",
-            last_name: newProfile.last_name || "",
-            email: newProfile.email || "",
-            full_name: newProfile.full_name || "",
-          });
-        }
-      } else {
-        setProfile(profileData);
+      if (userProfile) {
         setEditedProfile({
-          first_name: profileData.first_name || "",
-          last_name: profileData.last_name || "",
-          email: profileData.email || "",
-          full_name: profileData.full_name || "",
+          first_name: userProfile.first_name || "",
+          last_name: userProfile.last_name || "",
+          email: userProfile.email || "",
+          full_name: userProfile.full_name || "",
         });
       }
     } catch (err) {
-      console.error("Unexpected error loading profile:", err);
+      console.error("💥 Unexpected error loading profile:", err);
       setError("An unexpected error occurred");
     } finally {
       setLoading(false);
     }
   }, [user]);
 
+  const checkDocumentStatus = useCallback(async () => {
+    if (!user) return;
+
+    try {
+      await getDocumentStatus();
+    } catch (error) {
+      console.error("Error checking document status:", error);
+    }
+  }, [user, getDocumentStatus]);
+
   useEffect(() => {
     if (user) {
       loadProfile();
-      getDocumentStatus();
+      checkDocumentStatus();
     } else if (!authLoading) {
-      router.push("/login");
+      router.navigate({ to: "/login" });
     }
-  }, [user, authLoading, loadProfile, router, getDocumentStatus]);
+  }, [user, authLoading, loadProfile, checkDocumentStatus, router]);
 
   // Add profile update listener
   useEffect(() => {
     const handleProfileUpdate = () => {
       loadProfile();
-      getDocumentStatus();
+      checkDocumentStatus();
     };
 
     window.addEventListener("profile-updated", handleProfileUpdate);
@@ -151,7 +164,7 @@ export function AccountsPage() {
     return () => {
       window.removeEventListener("profile-updated", handleProfileUpdate);
     };
-  }, [loadProfile, getDocumentStatus]);
+  }, [loadProfile, checkDocumentStatus]);
 
   // Initialize editedProfile when user data becomes available
   useEffect(() => {
@@ -230,7 +243,7 @@ export function AccountsPage() {
   const handleSignOut = async () => {
     try {
       await signOut();
-      router.push("/");
+      router.navigate({ to: "/" });
     } catch (err) {
       console.error("Error signing out:", err);
     }

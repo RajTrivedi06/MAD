@@ -1,29 +1,15 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase/client";
 import type { Database } from "@/lib/supabase/database.types";
+import type {
+  CourseFilters,
+  CourseWithRequirements,
+} from "@/types/course.types";
 
 type Course = Database["public"]["Tables"]["courses"]["Row"];
 
-interface CourseWithPopularity extends Course {
-  popularity_stats?: {
-    percent_taken: number;
-    student_count: number;
-    requirement: string | null;
-  }[];
-}
-
-interface UseCoursesOptions {
-  searchQuery?: string;
-  college?: string[];
-  credits?: string[];
-  level?: string[];
-  crosslisted?: boolean | null;
-  limit?: number;
-  offset?: number;
-}
-
-export function useCourses(options: UseCoursesOptions = {}) {
-  const [courses, setCourses] = useState<CourseWithPopularity[]>([]);
+export function useCourses(filters: CourseFilters = {}) {
+  const [courses, setCourses] = useState<CourseWithRequirements[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
   const [totalCount, setTotalCount] = useState(0);
@@ -31,13 +17,20 @@ export function useCourses(options: UseCoursesOptions = {}) {
   useEffect(() => {
     fetchCourses();
   }, [
-    options.searchQuery,
-    options.college?.join(","),
-    options.credits?.join(","),
-    options.level?.join(","),
-    options.crosslisted,
-    options.limit,
-    options.offset,
+    filters.searchQuery,
+    filters.catalogNumber,
+    filters.term,
+    filters.courseCode?.join(","),
+    filters.college?.join(","),
+    filters.level?.join(","),
+    filters.credits?.join(","),
+    filters.crosslisted,
+    filters.breadth?.join(","),
+    filters.generalEducation?.join(","),
+    filters.repeatable,
+    filters.cloAudience?.join(","),
+    filters.limit,
+    filters.offset,
   ]);
 
   const fetchCourses = async () => {
@@ -45,11 +38,11 @@ export function useCourses(options: UseCoursesOptions = {}) {
       setLoading(true);
       setError(null);
 
-      // Start building the query
+      // Start building the query with joins
       let query = supabase.from("courses").select(
         `
           *,
-          requirement_popularity!inner (
+          requirement_popularity!left (
             percent_taken,
             student_count,
             requirement
@@ -58,49 +51,74 @@ export function useCourses(options: UseCoursesOptions = {}) {
         { count: "exact" }
       );
 
-      // Apply search filter
-      if (options.searchQuery) {
+      // Apply keyword search across multiple fields
+      if (filters.searchQuery) {
         query = query.or(
-          `title.ilike.%${options.searchQuery}%,description.ilike.%${options.searchQuery}%,course_code.ilike.%${options.searchQuery}%`
+          `title.ilike.%${filters.searchQuery}%,description.ilike.%${filters.searchQuery}%,course_code.ilike.%${filters.searchQuery}%`
         );
       }
 
-      // Apply college filter
-      if (options.college && options.college.length > 0) {
-        query = query.in("college", options.college);
+      // Apply catalog number filter (exact match for "Add by class number")
+      if (filters.catalogNumber) {
+        query = query.eq("catalog_number", filters.catalogNumber);
       }
 
-      // Apply credits filter
-      if (options.credits && options.credits.length > 0) {
-        query = query.in("credits", options.credits);
+      // Apply term filter (using last_taught_term)
+      if (filters.term) {
+        query = query.eq("last_taught_term", filters.term);
+      }
+
+      // Apply course code filter (subject filter)
+      if (filters.courseCode && filters.courseCode.length > 0) {
+        // Build an OR query for course codes that start with any of the selected subjects
+        const courseCodeFilters = filters.courseCode
+          .map((code) => `course_code.ilike.${code}%`)
+          .join(",");
+        query = query.or(courseCodeFilters);
+      }
+
+      // Apply college filter
+      if (filters.college && filters.college.length > 0) {
+        query = query.in("college", filters.college);
       }
 
       // Apply level filter
-      if (options.level && options.level.length > 0) {
-        // Map level names to actual values
-        const levelMap: Record<string, string[]> = {
-          "Elementary (100-299)": ["Elementary"],
-          "Intermediate (300-699)": ["Intermediate"],
-          "Advanced (700-999)": ["Advanced"],
-        };
+      if (filters.level && filters.level.length > 0) {
+        query = query.in("level", filters.level);
+      }
 
-        const levelValues = options.level.flatMap((l) => levelMap[l] || [l]);
-        if (levelValues.length > 0) {
-          query = query.in("level", levelValues);
-        }
+      // Apply credits filter
+      if (filters.credits && filters.credits.length > 0) {
+        query = query.in("credits", filters.credits);
       }
 
       // Apply crosslisted filter
-      if (options.crosslisted !== null && options.crosslisted !== undefined) {
-        query = query.eq("crosslisted", options.crosslisted);
+      if (filters.crosslisted !== null && filters.crosslisted !== undefined) {
+        query = query.eq("crosslisted", filters.crosslisted);
       }
 
+      // Apply repeatable filter
+      if (filters.repeatable !== null && filters.repeatable !== undefined) {
+        query = query.eq("repeatable", filters.repeatable);
+      }
+
+      // Apply CLO audience filter
+      if (filters.cloAudience && filters.cloAudience.length > 0) {
+        query = query.in("clo_audience", filters.cloAudience);
+      }
+
+      // Apply breadth filter (requires post-processing since it's an array field)
+      // We'll filter this client-side after fetching
+
+      // Apply general education filter (requires post-processing since it's an array field)
+      // We'll filter this client-side after fetching
+
       // Add pagination
-      const limit = options.limit || 50;
-      const offset = options.offset || 0;
+      const limit = filters.limit || 50;
+      const offset = filters.offset || 0;
       query = query.range(offset, offset + limit - 1);
 
-      // Order by course code and catalog number
+      // Order by course code and catalog number for consistent results
       query = query
         .order("course_code", { ascending: true })
         .order("catalog_number", { ascending: true });
@@ -109,20 +127,44 @@ export function useCourses(options: UseCoursesOptions = {}) {
 
       if (queryError) throw queryError;
 
-      // Group popularity stats by course
-      const coursesWithStats =
-        data?.map((item) => {
-          const course = { ...item };
-          // Remove the nested requirement_popularity from the course object
-          const { requirement_popularity, ...courseData } = course;
+      // Transform and filter the data
+      const coursesWithRequirements = (data || []).map((item) => {
+        const { requirement_popularity, ...courseData } = item;
 
-          return {
-            ...courseData,
-            popularity_stats: requirement_popularity,
-          } as CourseWithPopularity;
-        }) || [];
+        return {
+          ...courseData,
+          popularity_stats: requirement_popularity || [],
+          course_requirements: undefined, // Temporarily disabled until course_requirements table is set up
+        } as CourseWithRequirements;
+      });
 
-      setCourses(coursesWithStats);
+      // Client-side filtering for breadth requirements (array contains)
+      // Temporarily disabled until course_requirements table is set up
+      if (filters.breadth && filters.breadth.length > 0) {
+        console.log(
+          "Breadth filtering disabled - no course_requirements data available"
+        );
+        // coursesWithRequirements = coursesWithRequirements.filter((course) => {
+        //   const courseBreadth = course.course_requirements?.breadth_or || [];
+        //   return filters.breadth!.some((req) => courseBreadth.includes(req));
+        // });
+      }
+
+      // Client-side filtering for general education requirements (array contains)
+      // Temporarily disabled until course_requirements table is set up
+      if (filters.generalEducation && filters.generalEducation.length > 0) {
+        console.log(
+          "General education filtering disabled - no course_requirements data available"
+        );
+        // coursesWithRequirements = coursesWithRequirements.filter((course) => {
+        //   const courseGenEd = course.course_requirements?.gened_and || [];
+        //   return filters.generalEducation!.some((req) =>
+        //     courseGenEd.includes(req)
+        //   );
+        // });
+      }
+
+      setCourses(coursesWithRequirements);
       setTotalCount(count || 0);
     } catch (err) {
       console.error("Error fetching courses:", err);
