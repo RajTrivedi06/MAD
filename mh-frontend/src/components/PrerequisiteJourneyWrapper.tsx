@@ -26,31 +26,12 @@ export const PrerequisiteJourneyWrapper: React.FC<
 
   return (
     <div className={className}>
-      <Tabs defaultValue="journey" className="w-full">
-        <TabsList className="grid w-full grid-cols-2 mb-4">
-          <TabsTrigger value="journey" className="flex items-center gap-2">
-            <Map className="w-4 h-4" />
-            Interactive Journey
-          </TabsTrigger>
-          <TabsTrigger value="structure" className="flex items-center gap-2">
-            <GitBranch className="w-4 h-4" />
-            Structure View
-          </TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="journey">
-          <PrerequisiteJourney
-            courseId={courseId}
-            completedCourses={completedCourses}
-            inProgressCourses={inProgressCourses}
-            onNodeClick={onCourseClick}
-          />
-        </TabsContent>
-
-        <TabsContent value="structure">
-          <MockPrerequisiteDisplay courseId={courseId} />
-        </TabsContent>
-      </Tabs>
+      <PrerequisiteJourney
+        courseId={courseId}
+        completedCourses={completedCourses}
+        inProgressCourses={inProgressCourses}
+        onNodeClick={onCourseClick}
+      />
     </div>
   );
 };

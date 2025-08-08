@@ -11,6 +11,7 @@
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
   --animate-line-shadow: line-shadow 15s linear infinite;
+  --animate-shine: shine var(--duration) infinite linear;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -45,4 +46,22 @@ body {
   100% {
     background-position: 100% -100%;
   }
+}
+
+/* Shine animation for ShineBorder */
+@keyframes shine {
+  0% {
+    background-position: 0% 0%;
+  }
+  50% {
+    background-position: 100% 100%;
+  }
+  100% {
+    background-position: 0% 0%;
+  }
+}
+
+/* Utility class used by ShineBorder */
+.animate-shine {
+  animation: shine var(--duration) infinite linear;
 }

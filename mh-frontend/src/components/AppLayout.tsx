@@ -13,7 +13,7 @@ interface AppLayoutProps {
 const AppLayout: React.FC<AppLayoutProps> = ({
   children,
   showNav = true,
-  showFooter = true,
+  showFooter = false,
 }) => {
   return (
     <div className="min-h-screen flex flex-col">

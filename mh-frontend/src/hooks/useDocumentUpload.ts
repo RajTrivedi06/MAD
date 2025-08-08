@@ -93,14 +93,19 @@ export function useDocumentUpload() {
 
       const formData = new FormData();
       formData.append("file", file);
-      formData.append("user_id", user.id);
 
       const endpoint = type === "dars" ? "/api/dars/parse" : "/api/cv/parse";
       const backendUrl =
         process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8000";
+      const { data: sessionRes } = await supabase.auth.getSession();
+      const token = sessionRes.session?.access_token;
+
       const response = await fetch(`${backendUrl}${endpoint}`, {
         method: "POST",
         body: formData,
+        headers: {
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
       });
 
       if (!response.ok) {
@@ -110,7 +115,18 @@ export function useDocumentUpload() {
 
       updateProgress(type, 50); // Processing
 
-      const data = await response.json();
+      // After ack, fetch stored data from profile for UI
+      const profileEndpoint =
+        type === "dars"
+          ? `/api/dars/profile/${user.id}`
+          : `/api/cv/profile/${user.id}`;
+      const profRes = await fetch(`${backendUrl}${profileEndpoint}`, {
+        headers: {
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+      });
+      const profJson = profRes.ok ? await profRes.json() : null;
+      const parsedData = profJson?.dars_data ?? profJson?.cv_data ?? null;
 
       updateProgress(type, 100); // Complete
 
@@ -118,7 +134,7 @@ export function useDocumentUpload() {
         isUploading: false,
         uploadProgress: 100,
         error: null,
-        uploadedData: data,
+        uploadedData: parsedData,
       });
 
       // Update status
@@ -146,7 +162,7 @@ export function useDocumentUpload() {
         window.dispatchEvent(new Event("profile-updated"));
       }
 
-      return { success: true, data };
+      return { success: true, data: parsedData ?? {} };
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : "Unknown error";
       setter({

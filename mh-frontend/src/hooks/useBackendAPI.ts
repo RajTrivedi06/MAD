@@ -1,6 +1,6 @@
-// hooks/useBackendAPI.ts
 import { useState } from "react";
 import { getCurrentUser } from "@/lib/supabase/auth";
+import { supabase } from "@/lib/supabase/client";
 
 const BACKEND_URL =
   process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8000";
@@ -93,6 +93,20 @@ export interface CVData {
   }>;
 }
 
+// Shared types for interest recommendations
+export type RecResponse = {
+  course_id: number;
+  course_code?: string | null;
+  catalog_number?: string | null;
+  title?: string | null;
+  similarity?: number | null;
+};
+
+type InterestPayload = {
+  interest_text: string;
+  top_k?: number;
+};
+
 export function useBackendAPI() {
   const [uploadProgress, setUploadProgress] = useState<UploadProgress | null>(
     null
@@ -108,6 +122,58 @@ export function useBackendAPI() {
     setUploadProgress({ stage, message, progress });
   };
 
+  // ---------- Unified interest-based recommendation helper ----------
+  const recommendByInterest = async (
+    payload: InterestPayload
+  ): Promise<RecResponse[]> => {
+    const { data: sessionRes } = await supabase.auth.getSession();
+    const token = sessionRes.session?.access_token;
+
+    console.log("[recommendByInterest] →", {
+      route: "/api/recommend/interest",
+      hasToken: !!token,
+      tokenPreview: token ? token.slice(0, 15) + "..." : null,
+      body: {
+        interest_text: payload.interest_text,
+        top_k: payload.top_k ?? 10,
+      },
+      ts: new Date().toISOString(),
+    });
+
+    const res = await fetch(`${BACKEND_URL}/api/recommend/interest`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify({
+        interest_text: payload.interest_text,
+        top_k: payload.top_k ?? 10,
+      }),
+      credentials: "include",
+    });
+
+    console.log("[recommendByInterest] ←", {
+      status: res.status,
+      ok: res.ok,
+      ts: new Date().toISOString(),
+    });
+
+    if (!res.ok) {
+      const text = await res.text().catch(() => "");
+      console.error("[recommendByInterest] ERROR payload:", text);
+      throw new Error(text || `HTTP ${res.status}`);
+    }
+
+    // 👇 Add these lines
+    const json = (await res.json()) as RecResponse[];
+    console.log("[recommendByInterest] parsed:", {
+      count: json?.length ?? 0,
+      sample: json?.[0],
+    });
+    return json;
+  };
+
   const uploadDarsFile = async (
     file: File
   ): Promise<{ success: boolean; data?: DarsData; error?: string }> => {
@@ -115,7 +181,6 @@ export function useBackendAPI() {
       setIsLoading(true);
       setError(null);
 
-      // Get current user
       const user = await getCurrentUser();
       if (!user) {
         throw new Error("User not authenticated");
@@ -129,9 +194,29 @@ export function useBackendAPI() {
 
       updateProgress("processing", "Processing DARS data...", 30);
 
+      const { data: sessionRes } = await supabase.auth.getSession();
+      const token = sessionRes.session?.access_token;
+
+      console.log("[uploadDarsFile] →", {
+        route: "/api/dars/parse",
+        hasToken: !!token,
+        tokenPreview: token ? token.slice(0, 15) + "..." : null,
+        ts: new Date().toISOString(),
+      });
+
       const response = await fetch(`${BACKEND_URL}/api/dars/parse`, {
         method: "POST",
         body: formData,
+        headers: {
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+      });
+
+      console.log("[uploadDarsFile] ←", {
+        route: "/api/dars/parse",
+        status: response.status,
+        hadAuthHeader: !!token,
+        ts: new Date().toISOString(),
       });
 
       if (!response.ok) {
@@ -143,24 +228,45 @@ export function useBackendAPI() {
 
       updateProgress("storing", "Storing in profile...", 70);
 
-      const result = await response.json();
+      console.log("[uploadDarsFile] profile →", {
+        route: `/api/dars/profile/${user.id}`,
+        hasToken: !!token,
+        ts: new Date().toISOString(),
+      });
+
+      const profRes = await fetch(
+        `${BACKEND_URL}/api/dars/profile/${user.id}`,
+        {
+          headers: {
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
+        }
+      );
+
+      console.log("[uploadDarsFile] profile ←", {
+        route: `/api/dars/profile/${user.id}`,
+        status: profRes.status,
+        ts: new Date().toISOString(),
+      });
+
+      let darsData: DarsData | undefined = undefined;
+      if (profRes.ok) {
+        const profJson = await profRes.json();
+        darsData = profJson?.dars_data as DarsData | undefined;
+      }
 
       updateProgress("complete", "DARS processing complete!", 100);
 
       return {
         success: true,
-        data: result.dars_data,
+        data: darsData,
       };
     } catch (err) {
       const errorMessage =
         err instanceof Error ? err.message : "Unknown error occurred";
       setError(errorMessage);
       updateProgress("error", errorMessage, 0);
-
-      return {
-        success: false,
-        error: errorMessage,
-      };
+      return { success: false, error: errorMessage };
     } finally {
       setIsLoading(false);
     }
@@ -173,7 +279,6 @@ export function useBackendAPI() {
       setIsLoading(true);
       setError(null);
 
-      // Get current user
       const user = await getCurrentUser();
       if (!user) {
         throw new Error("User not authenticated");
@@ -187,9 +292,29 @@ export function useBackendAPI() {
 
       updateProgress("processing", "Processing CV with AI...", 30);
 
+      const { data: sessionRes } = await supabase.auth.getSession();
+      const token = sessionRes.session?.access_token;
+
+      console.log("[uploadCVFile] →", {
+        route: "/api/cv/parse",
+        hasToken: !!token,
+        tokenPreview: token ? token.slice(0, 15) + "..." : null,
+        ts: new Date().toISOString(),
+      });
+
       const response = await fetch(`${BACKEND_URL}/api/cv/parse`, {
         method: "POST",
         body: formData,
+        headers: {
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+      });
+
+      console.log("[uploadCVFile] ←", {
+        route: "/api/cv/parse",
+        status: response.status,
+        hadAuthHeader: !!token,
+        ts: new Date().toISOString(),
       });
 
       if (!response.ok) {
@@ -201,24 +326,42 @@ export function useBackendAPI() {
 
       updateProgress("storing", "Storing in profile...", 70);
 
-      const result = await response.json();
+      console.log("[uploadCVFile] profile →", {
+        route: `/api/cv/profile/${user.id}`,
+        hasToken: !!token,
+        ts: new Date().toISOString(),
+      });
+
+      const profRes = await fetch(`${BACKEND_URL}/api/cv/profile/${user.id}`, {
+        headers: {
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+      });
+
+      console.log("[uploadCVFile] profile ←", {
+        route: `/api/cv/profile/${user.id}`,
+        status: profRes.status,
+        ts: new Date().toISOString(),
+      });
+
+      let cvData: CVData | undefined = undefined;
+      if (profRes.ok) {
+        const profJson = await profRes.json();
+        cvData = profJson?.cv_data as CVData | undefined;
+      }
 
       updateProgress("complete", "CV processing complete!", 100);
 
       return {
         success: true,
-        data: result.structured_data,
+        data: cvData,
       };
     } catch (err) {
       const errorMessage =
         err instanceof Error ? err.message : "Unknown error occurred";
       setError(errorMessage);
       updateProgress("error", errorMessage, 0);
-
-      return {
-        success: false,
-        error: errorMessage,
-      };
+      return { success: false, error: errorMessage };
     } finally {
       setIsLoading(false);
     }
@@ -229,9 +372,29 @@ export function useBackendAPI() {
       const user = await getCurrentUser();
       if (!user) return null;
 
+      const { data: sessionRes } = await supabase.auth.getSession();
+      const token = sessionRes.session?.access_token;
+
+      console.log("[getUserDarsData] →", {
+        route: `/api/dars/profile/${user.id}`,
+        hasToken: !!token,
+        ts: new Date().toISOString(),
+      });
+
       const response = await fetch(
-        `${BACKEND_URL}/api/dars/profile/${user.id}`
+        `${BACKEND_URL}/api/dars/profile/${user.id}`,
+        {
+          headers: {
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
+        }
       );
+
+      console.log("[getUserDarsData] ←", {
+        route: `/api/dars/profile/${user.id}`,
+        status: response.status,
+        ts: new Date().toISOString(),
+      });
 
       if (!response.ok) {
         if (response.status === 404) return null;
@@ -251,7 +414,26 @@ export function useBackendAPI() {
       const user = await getCurrentUser();
       if (!user) return null;
 
-      const response = await fetch(`${BACKEND_URL}/api/cv/profile/${user.id}`);
+      const { data: sessionRes } = await supabase.auth.getSession();
+      const token = sessionRes.session?.access_token;
+
+      console.log("[getUserCVData] →", {
+        route: `/api/cv/profile/${user.id}`,
+        hasToken: !!token,
+        ts: new Date().toISOString(),
+      });
+
+      const response = await fetch(`${BACKEND_URL}/api/cv/profile/${user.id}`, {
+        headers: {
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+      });
+
+      console.log("[getUserCVData] ←", {
+        route: `/api/cv/profile/${user.id}`,
+        status: response.status,
+        ts: new Date().toISOString(),
+      });
 
       if (!response.ok) {
         if (response.status === 404) return null;
@@ -268,7 +450,7 @@ export function useBackendAPI() {
 
   const checkBackendHealth = async (): Promise<boolean> => {
     try {
-      const response = await fetch(`${BACKEND_URL}/health`);
+      const response = await fetch(`${BACKEND_URL}/api/dars/health`);
       return response.ok;
     } catch {
       return false;
@@ -282,19 +464,13 @@ export function useBackendAPI() {
   };
 
   return {
-    // Upload functions
     uploadDarsFile,
     uploadCVFile,
-
-    // Data retrieval
     getUserDarsData,
     getUserCVData,
-
-    // Utility functions
     checkBackendHealth,
     resetUploadState,
-
-    // State
+    recommendByInterest,
     uploadProgress,
     isLoading,
     error,

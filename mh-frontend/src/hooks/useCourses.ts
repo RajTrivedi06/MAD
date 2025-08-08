@@ -8,6 +8,20 @@ import type {
 
 type Course = Database["public"]["Tables"]["courses"]["Row"];
 
+type JoinedCourseRow = Course & {
+  requirement_popularity?:
+    | {
+        percent_taken: number;
+        student_count: number;
+        requirement: string | null;
+      }[]
+    | null;
+  course_requirements?:
+    | { breadth_or: string[] | null; gened_and: string[] | null }
+    | Array<{ breadth_or: string[] | null; gened_and: string[] | null }>
+    | null;
+};
+
 export function useCourses(filters: CourseFilters = {}) {
   const [courses, setCourses] = useState<CourseWithRequirements[]>([]);
   const [loading, setLoading] = useState(true);
@@ -39,6 +53,14 @@ export function useCourses(filters: CourseFilters = {}) {
       setError(null);
 
       // Start building the query with joins
+      const wantsCRFilter =
+        (filters.breadth && filters.breadth.length > 0) ||
+        (filters.generalEducation && filters.generalEducation.length > 0);
+
+      const crJoin = wantsCRFilter
+        ? "course_requirements!inner ( breadth_or, gened_and )"
+        : "course_requirements!left ( breadth_or, gened_and )";
+
       let query = supabase.from("courses").select(
         `
           *,
@@ -46,7 +68,8 @@ export function useCourses(filters: CourseFilters = {}) {
             percent_taken,
             student_count,
             requirement
-          )
+          ),
+          ${crJoin}
         `,
         { count: "exact" }
       );
@@ -107,11 +130,21 @@ export function useCourses(filters: CourseFilters = {}) {
         query = query.in("clo_audience", filters.cloAudience);
       }
 
-      // Apply breadth filter (requires post-processing since it's an array field)
-      // We'll filter this client-side after fetching
+      // Apply breadth filter (array overlap on related table)
+      if (filters.breadth && filters.breadth.length > 0) {
+        query = query.overlaps(
+          "course_requirements.breadth_or",
+          filters.breadth as string[]
+        );
+      }
 
-      // Apply general education filter (requires post-processing since it's an array field)
-      // We'll filter this client-side after fetching
+      // Apply general education filter (array overlap on related table)
+      if (filters.generalEducation && filters.generalEducation.length > 0) {
+        query = query.overlaps(
+          "course_requirements.gened_and",
+          filters.generalEducation as string[]
+        );
+      }
 
       // Add pagination
       const limit = filters.limit || 50;
@@ -127,42 +160,32 @@ export function useCourses(filters: CourseFilters = {}) {
 
       if (queryError) throw queryError;
 
-      // Transform and filter the data
-      const coursesWithRequirements = (data || []).map((item) => {
-        const { requirement_popularity, ...courseData } = item;
+      // Transform and map nested joins
+      const rows = (data as unknown as JoinedCourseRow[]) || [];
+      const coursesWithRequirements = rows.map((item) => {
+        const { requirement_popularity, course_requirements, ...courseData } =
+          item as JoinedCourseRow;
+
+        const crArr = Array.isArray(course_requirements)
+          ? course_requirements
+          : course_requirements
+          ? [course_requirements]
+          : [];
+        const crFirst = crArr[0];
 
         return {
-          ...courseData,
+          ...(courseData as unknown as CourseWithRequirements),
           popularity_stats: requirement_popularity || [],
-          course_requirements: undefined, // Temporarily disabled until course_requirements table is set up
+          course_requirements: crFirst
+            ? {
+                breadth_or: (crFirst.breadth_or as string[] | null) ?? [],
+                gened_and: (crFirst.gened_and as string[] | null) ?? [],
+              }
+            : { breadth_or: [], gened_and: [] },
         } as CourseWithRequirements;
       });
 
-      // Client-side filtering for breadth requirements (array contains)
-      // Temporarily disabled until course_requirements table is set up
-      if (filters.breadth && filters.breadth.length > 0) {
-        console.log(
-          "Breadth filtering disabled - no course_requirements data available"
-        );
-        // coursesWithRequirements = coursesWithRequirements.filter((course) => {
-        //   const courseBreadth = course.course_requirements?.breadth_or || [];
-        //   return filters.breadth!.some((req) => courseBreadth.includes(req));
-        // });
-      }
-
-      // Client-side filtering for general education requirements (array contains)
-      // Temporarily disabled until course_requirements table is set up
-      if (filters.generalEducation && filters.generalEducation.length > 0) {
-        console.log(
-          "General education filtering disabled - no course_requirements data available"
-        );
-        // coursesWithRequirements = coursesWithRequirements.filter((course) => {
-        //   const courseGenEd = course.course_requirements?.gened_and || [];
-        //   return filters.generalEducation!.some((req) =>
-        //     courseGenEd.includes(req)
-        //   );
-        // });
-      }
+      // Server-side filtering used above; no client-side filtering necessary
 
       setCourses(coursesWithRequirements);
       setTotalCount(count || 0);

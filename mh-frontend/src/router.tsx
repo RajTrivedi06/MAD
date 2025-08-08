@@ -6,15 +6,16 @@ import {
 import { RootLayout } from "./components/RootLayout";
 import { LandingPage } from "./pages/LandingPage";
 import { CourseSearchAI } from "./pages/CourseSearchAI";
-import { RAFeature } from "./pages/RAFeature";
 import { LoginPage } from "./pages/auth/LoginPage";
 import { RegisterPage } from "./pages/auth/RegisterPage";
 import { AuthCallback } from "./pages/auth/AuthCallback";
 import { AccountsPage } from "./pages/AccountsPage";
-import { RaFinderPage } from "./features/ra-finder/RaFinderPage";
+import { RAFeature } from "./pages/RAFeature";
 import TestPrereqGraph from "./pages/TestPrereqGraph";
 import D3ReactFlowTestPage from "./pages/d3-reactflow-test";
 import MinimalReactFlowTest from "./pages/minimal-reactflow-test";
+import TestReactFlow from "./pages/TestReactFlow";
+import { StudyGroupPage } from "./pages/StudyGroupPage";
 
 const rootRoute = createRootRoute({
   component: RootLayout,
@@ -53,13 +54,19 @@ const authCallbackRoute = createRoute({
 const raFinderRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/ra-finder",
-  component: RaFinderPage,
+  component: RAFeature,
 });
 
 const accountsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/accounts",
   component: AccountsPage,
+});
+
+const studyGroupRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/study-group",
+  component: StudyGroupPage,
 });
 
 const testPrereqGraphRoute = createRoute({
@@ -80,6 +87,12 @@ const minimalReactFlowTestRoute = createRoute({
   component: MinimalReactFlowTest,
 });
 
+const testReactFlowRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/test-reactflow",
+  component: TestReactFlow,
+});
+
 const routeTree = rootRoute.addChildren([
   indexRoute,
   courseSearchRoute,
@@ -88,9 +101,11 @@ const routeTree = rootRoute.addChildren([
   registerRoute,
   authCallbackRoute,
   accountsRoute,
+  studyGroupRoute,
   testPrereqGraphRoute,
   d3ReactFlowTestRoute,
   minimalReactFlowTestRoute,
+  testReactFlowRoute,
 ]);
 
 export const router = createRouter({ routeTree });

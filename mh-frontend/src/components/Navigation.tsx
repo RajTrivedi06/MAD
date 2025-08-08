@@ -29,7 +29,14 @@ const Navigation = () => {
     setIsMenuOpen(false);
   };
 
-  const navItems = [
+  type NavItem = {
+    name: string;
+    href: string;
+    icon: React.ReactNode;
+    badge?: string;
+  };
+
+  const navItems: NavItem[] = [
     {
       name: "Course Search",
       href: "/course-search",
@@ -37,15 +44,15 @@ const Navigation = () => {
     },
     {
       name: "RA Finder",
-      href: "/ra-feature",
+      href: "/ra-finder",
       icon: <FlaskConical className="w-4 h-4" />,
     },
 
     {
       name: "Study Groups",
-      href: "#",
+      href: "/study-group",
       icon: <Users className="w-4 h-4" />,
-      badge: "Coming Soon",
+      badge: "Beta",
     },
   ];
 

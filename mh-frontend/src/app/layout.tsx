@@ -4,7 +4,7 @@ import "./globals.css";
 import { QueryProvider } from "../providers/QueryProvider";
 import { AuthProvider } from "../contexts/AuthContext";
 import Navigation from "../components/Navigation";
-import Footer from "../components/Footer";
+import ConditionalFooter from "../components/ConditionalFooter";
 import { RoutingDebug } from "../components/RoutingDebug";
 import { ErrorBoundary } from "../components/ErrorBoundary";
 import { AccountsDebug } from "../components/AccountsDebug";
@@ -41,7 +41,7 @@ export default function RootLayout({
               <div className="min-h-screen flex flex-col">
                 <Navigation />
                 <main className="flex-1 pt-16">{children}</main>
-                <Footer />
+                <ConditionalFooter />
                 {process.env.NODE_ENV === "development" && (
                   <>
                     <RoutingDebug />
